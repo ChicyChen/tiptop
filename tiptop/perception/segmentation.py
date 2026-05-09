@@ -359,6 +359,11 @@ def segment_pointcloud_by_masks(
             continue
 
         z_mask = xyz_obj[..., 2] > max_z
+        if z_mask.sum() < 10:
+            _log.warning(
+                f"Skipping {label}: too few points above table surface (max_z={max_z:.3f}, kept={int(z_mask.sum())}/{len(xyz_obj)})."
+            )
+            continue
         xyz_proj, rgb_proj = augment_with_base_projections(xyz_obj[z_mask], rgb_obj[z_mask])
 
         # Create Open3D point cloud

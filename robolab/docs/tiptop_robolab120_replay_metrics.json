@@ -1,0 +1,885 @@
+{
+  "num_replayed": 52,
+  "replay_successes": 22,
+  "replay_success_rate": 0.4230769230769231,
+  "results": [
+    {
+      "task": "AnimalsInBinTask",
+      "instruction": "Put the lizards in the bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/AnimalsInBinTask/replay.mp4",
+      "executed_steps": 841,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "AppleAndYogurtInBowlTask",
+      "instruction": "Put the apple and yogurt in the bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 769
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/AppleAndYogurtInBowlTask/replay.mp4",
+      "executed_steps": 868,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "BBQSauceInBinTask",
+      "instruction": "Put the red BBQ sauce bottles in the grey bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/BBQSauceInBinTask/replay.mp4",
+      "executed_steps": 895,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "BagelsOnPlateTask",
+      "instruction": "Put the bagels on the plate",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 900
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/BagelsOnPlateTask/replay.mp4",
+      "executed_steps": 910,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "BananaInBowlTask",
+      "instruction": "Pick up the banana and place it in the bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 383
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/BananaInBowlTask/replay.mp4",
+      "executed_steps": 491,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "BananaOnPlateTask",
+      "instruction": "Pick up the banana and put it on the plate",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 398
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/BananaOnPlateTask/replay.mp4",
+      "executed_steps": 466,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "BananaThenRubiksCubeTask",
+      "instruction": "put the banana then the cube in the bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 845
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/BananaThenRubiksCubeTask/replay.mp4",
+      "executed_steps": 814,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "BananasInBinThreeTotalTask",
+      "instruction": "Make sure there are 3 (three) bananas in the grey bin.",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 900
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/BananasInBinThreeTotalTask/replay.mp4",
+      "executed_steps": 988,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "BigPumpkinInBinTask",
+      "instruction": "Put the bigger pumpkin in the bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/BigPumpkinInBinTask/replay.mp4",
+      "executed_steps": 446,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "BowlInBinTask",
+      "instruction": "put the bowl in the grey bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/BowlInBinTask/replay.mp4",
+      "executed_steps": 491,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "ButterAboveRaisinTask",
+      "instruction": "Pick up the butter box and place it on top of the raisin box",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 600
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/ButterAboveRaisinTask/replay.mp4",
+      "executed_steps": 545,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "ClampInRightBinTask",
+      "instruction": "Put the spring clamp in the right bin",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 432
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/ClampInRightBinTask/replay.mp4",
+      "executed_steps": 592,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "ClutterPlasticTask",
+      "instruction": "Put all plastic bottles away in the bin",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 1300
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/ClutterPlasticTask/replay.mp4",
+      "executed_steps": 1261,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "ClutterPumpkinTask",
+      "instruction": "Put all the pumpkins away in the bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/ClutterPumpkinTask/replay.mp4",
+      "executed_steps": 841,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "CoffeePotInBinTask",
+      "instruction": "Put the coffee pot in the grey bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/CoffeePotInBinTask/replay.mp4",
+      "executed_steps": 423,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "FoodPacking1BoxesTask",
+      "instruction": "Pack boxed foods into the bin",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 474
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/FoodPacking1BoxesTask/replay.mp4",
+      "executed_steps": 603,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "FoodPacking1CansTask",
+      "instruction": "Pack canned foods into the bin",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 397
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/FoodPacking1CansTask/replay.mp4",
+      "executed_steps": 531,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "FoodPacking2BoxesTask",
+      "instruction": "Pack boxed foods into the bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/FoodPacking2BoxesTask/replay.mp4",
+      "executed_steps": 611,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "FruitsGreenLimesOnPlateTask",
+      "instruction": "Put all the green fruit on the plate",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/FruitsGreenLimesOnPlateTask/replay.mp4",
+      "executed_steps": 451,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "FruitsOnionTask",
+      "instruction": "Put the onion in the wood bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 302
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/FruitsOnionTask/replay.mp4",
+      "executed_steps": 458,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "FruitsOrangesOnPlateTask",
+      "instruction": "Put all the oranges on the plate",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/FruitsOrangesOnPlateTask/replay.mp4",
+      "executed_steps": 1277,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "GrabAFruitTask",
+      "instruction": "Pick up a fruit",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 450
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/GrabAFruitTask/replay.mp4",
+      "executed_steps": 1197,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "JugsOnShelfTask",
+      "instruction": "Put all the jugs on the shelf",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/JugsOnShelfTask/replay.mp4",
+      "executed_steps": 907,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "MarkerInMugTask",
+      "instruction": "Put the whiteboard marker in the mug",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 600
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/MarkerInMugTask/replay.mp4",
+      "executed_steps": 1007,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "MouseOnKeyboardTask",
+      "instruction": "Put the computer mouse on the keyboard",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/MouseOnKeyboardTask/replay.mp4",
+      "executed_steps": 489,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "MustardAboveRaisinTask",
+      "instruction": "Place the mustard on the raisin box. ",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 432
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/MustardAboveRaisinTask/replay.mp4",
+      "executed_steps": 544,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "MustardInLeftBinTask",
+      "instruction": "Put the mustard in the left bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 450
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/MustardInLeftBinTask/replay.mp4",
+      "executed_steps": 588,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "MustardInRightBinTask",
+      "instruction": "Put the mustard in the right bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 450
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/MustardInRightBinTask/replay.mp4",
+      "executed_steps": 492,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "OneBottleOnShelfTask",
+      "instruction": "Put any white plastic bottle on the shelf",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 804
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/OneBottleOnShelfTask/replay.mp4",
+      "executed_steps": 852,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "PickDrillTask",
+      "instruction": "Pick up the cordless drill.",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 600
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/PickDrillTask/replay.mp4",
+      "executed_steps": 463,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "PickOrangeObjectTask",
+      "instruction": "Pick up the orange measuring cup",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/PickOrangeObjectTask/replay.mp4",
+      "executed_steps": 651,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RecycleCartonsVerticalCrateTask",
+      "instruction": "Put the cartons that can be recycled in the vertical crate",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 1350
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RecycleCartonsVerticalCrateTask/replay.mp4",
+      "executed_steps": 1175,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RedDishesInBinTask",
+      "instruction": "Put the red dishware in the grey bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RedDishesInBinTask/replay.mp4",
+      "executed_steps": 450,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RedItemsInBinTask",
+      "instruction": "Put all the red things in the grey bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 900
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RedItemsInBinTask/replay.mp4",
+      "executed_steps": 841,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "ReorientRedMugTask",
+      "instruction": "Put the red mug upright so that the opening is facing upwards.",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": null,
+          "step": null
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/ReorientRedMugTask/replay.mp4",
+      "executed_steps": 447,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RubiksCubeAndBananaTask",
+      "instruction": "Put the cube and the banana in the bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 697
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RubiksCubeAndBananaTask/replay.mp4",
+      "executed_steps": 804,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RubiksCubeBehindBowlTask",
+      "instruction": "Put the rubiks cube behind the bowl",
+      "returncode": 124,
+      "error": "timeout_1800s",
+      "success": false,
+      "env_results": null,
+      "video": null,
+      "executed_steps": null,
+      "failure_reason": "replay_timeout"
+    },
+    {
+      "task": "RubiksCubeInFrontOfBowlTask",
+      "instruction": "Put the rubiks cube in front of the bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 424
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RubiksCubeInFrontOfBowlTask/replay.mp4",
+      "executed_steps": 480,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RubiksCubeLeftOfBowlTask",
+      "instruction": "Put the rubiks cube to the left of the bowl",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 450
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RubiksCubeLeftOfBowlTask/replay.mp4",
+      "executed_steps": 478,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RubiksCubeOrBananaTask",
+      "instruction": "Put the cube or the banana in the bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 393
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RubiksCubeOrBananaTask/replay.mp4",
+      "executed_steps": 463,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RubiksCubeRightOfBowlTask",
+      "instruction": "Put the rubiks cube to the right of the bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 446
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RubiksCubeRightOfBowlTask/replay.mp4",
+      "executed_steps": 489,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RubiksCubeTask",
+      "instruction": "Put the cube in the bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 396
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RubiksCubeTask/replay.mp4",
+      "executed_steps": 466,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RubiksCubeThenBananaTask",
+      "instruction": "Put the cube then the banana in the bowl",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 900
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RubiksCubeThenBananaTask/replay.mp4",
+      "executed_steps": 1053,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "RubiksCubesInBinTask",
+      "instruction": "Sort all rubiks cubes into the bin",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 1800
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/RubiksCubesInBinTask/replay.mp4",
+      "executed_steps": 1691,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "SauceBottlesCrateTask",
+      "instruction": "Put the red bbq sauce bottle in the crate",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 364
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/SauceBottlesCrateTask/replay.mp4",
+      "executed_steps": 462,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "SmallPumpkinInBinTask",
+      "instruction": "Put the small pumpkin in the bin",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 440
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/SmallPumpkinInBinTask/replay.mp4",
+      "executed_steps": 498,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "StackWhiteMugsTask",
+      "instruction": "Stack the white mugs on top of each other.",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 325
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/StackWhiteMugsTask/replay.mp4",
+      "executed_steps": 431,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "ThrowAwayAppleTask",
+      "instruction": "Throw away the apple",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 420
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/ThrowAwayAppleTask/replay.mp4",
+      "executed_steps": 480,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "ToyInBinTask",
+      "instruction": "Put the lizard away in the bin",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 380
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/ToyInBinTask/replay.mp4",
+      "executed_steps": 488,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "WhiteMugInCenterOfTableTask",
+      "instruction": "Put the white mug in the center of the table.",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 450
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/WhiteMugInCenterOfTableTask/replay.mp4",
+      "executed_steps": 495,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "WhiteMugsInBinTask",
+      "instruction": "Clean up the white mugs",
+      "success": false,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": false,
+          "step": 900
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/WhiteMugsInBinTask/replay.mp4",
+      "executed_steps": 1105,
+      "stride": 4,
+      "max_joint_step": 0.03
+    },
+    {
+      "task": "YogurtInBowlTask",
+      "instruction": "Put the small red yogurt in the red bowl",
+      "success": true,
+      "env_results": [
+        {
+          "env_id": 0,
+          "success": true,
+          "step": 363
+        }
+      ],
+      "subtask_info": null,
+      "video": "/home/box01/code/agent_robot/tiptop_robolab120_external_deeper_replay/YogurtInBowlTask/replay.mp4",
+      "executed_steps": 461,
+      "stride": 4,
+      "max_joint_step": 0.03
+    }
+  ]
+}
