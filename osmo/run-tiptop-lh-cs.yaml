@@ -49,6 +49,11 @@ workflow:
       github-pat: /tmp/github
       hf-token: /tmp/hf
       nvidia-api-key: /tmp/nvidia
+      # Optional — required only when llm_backend=gemini so the entry
+      # script can export GOOGLE_API_KEY before the runner spawns.
+      # When llm_backend=nvidia (default) we don't need it; osmo
+      # tolerates the mount being unused.
+      google-api-key: /tmp/google
     files:
     - path: /tmp/setup_github_auth.sh
       contents: |-
@@ -124,11 +129,13 @@ workflow:
         export M2T2_DIR=$LUSTRE_DIR/M2T2
         export VLM_ORCH_DIR=$LUSTRE_DIR/vlm-orchestrator
 
-        echo "[auth] /tmp/hf: $(ls /tmp/hf/ 2>&1)  /tmp/nvidia: $(ls /tmp/nvidia/ 2>&1)"
+        echo "[auth] /tmp/hf: $(ls /tmp/hf/ 2>&1)  /tmp/nvidia: $(ls /tmp/nvidia/ 2>&1)  /tmp/google: $(ls /tmp/google/ 2>&1)"
         HF_FILE=$(ls /tmp/hf/ 2>/dev/null | head -1)
         NV_FILE=$(ls /tmp/nvidia/ 2>/dev/null | head -1)
+        GG_FILE=$(ls /tmp/google/ 2>/dev/null | head -1)
         export HF_TOKEN=$(cat "/tmp/hf/$HF_FILE" 2>/dev/null)
         export NVIDIA_API_KEY=$(cat "/tmp/nvidia/$NV_FILE" 2>/dev/null)
+        export GOOGLE_API_KEY=$(cat "/tmp/google/$GG_FILE" 2>/dev/null)
 
         # ---------------------------------------------------------- #
         # Sync ChicyChen forks of tiptop + m2t2-tiptop into Lustre.
