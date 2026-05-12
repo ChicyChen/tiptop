@@ -356,14 +356,7 @@ workflow:
             # find this plan (it expects [{env_name, run_dir, has_plan}]).
             PLAN_TS_DIR=$(find "$PLAN_DIR" -maxdepth 1 -mindepth 1 -type d | head -1)
             if [ -n "$PLAN_TS_DIR" ] && [ -f "$PLAN_TS_DIR/tiptop_plan.json" ]; then
-              python3 -c "
-import json
-print(json.dumps([{
-    'env_name': '$scene',
-    'run_dir': '$PLAN_TS_DIR',
-    'has_plan': True,
-}]))
-" > "$PLAN_DIR/summary.json"
+              SCENE="$scene" PLAN_TS_DIR="$PLAN_TS_DIR" python3 -c "import json,os; print(json.dumps([{'env_name':os.environ['SCENE'],'run_dir':os.environ['PLAN_TS_DIR'],'has_plan':True}]))" > "$PLAN_DIR/summary.json"
             else
               echo "[run] no tiptop_plan.json — replay will skip this scene/trial"
               echo '[]' > "$PLAN_DIR/summary.json"
