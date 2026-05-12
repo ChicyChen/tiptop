@@ -17,6 +17,10 @@ p.add_argument('--settle-steps', type=int, default=20)
 p.add_argument('--gripper-steps', type=int, default=20)
 p.add_argument('--post-steps', type=int, default=80)
 p.add_argument('--fps', type=float, default=15)
+# Mirror exporter: extra subdirs let LH-CS / LH-vague tasks be discovered
+# alongside the original robolab-120 (`benchmark`, `custom`) tree.
+p.add_argument('--task-subdirs', nargs='+', default=None,
+               help='Robolab task subdirs to search (default: robolab.constants.DEFAULT_TASK_SUBFOLDERS)')
 AppLauncher.add_app_launcher_args(p)
 args,_=p.parse_known_args(); args.enable_cameras=True
 app=AppLauncher(args).app
@@ -50,7 +54,10 @@ try:
   wrist_depth=ObsTerm(func=mdp.observations.image,params={'sensor_cfg':SceneEntityCfg('wrist_cam'),'data_type':'depth','normalize':False})
   def __post_init__(self): self.enable_corruption=False; self.concatenate_terms=False
  Obs=generate_obs_cfg({'image_obs':RgbdObsCfg(),'proprio_obs':ProprioceptionObservationCfg()})
- auto_discover_and_create_cfgs(task_dir=TASK_DIR,task_subdirs=DEFAULT_TASK_SUBFOLDERS,tasks=[args.task],pattern='*.py',env_prefix='',env_postfix='',observations_cfg=Obs(),actions_cfg=DroidJointPositionActionCfg(),robot_cfg=DroidRgbdWristCfg,camera_cfg=[RgbdExternalCameraCfg],lighting_cfg=SphereLightCfg,background_cfg=HomeOfficeBackgroundCfg,contact_gripper=contact_gripper,dt=1/(60*2),render_interval=8,decimation=8,seed=1)
+ # Robolab API drift (2026-05-11): factory no longer accepts `tasks=`;
+ # we register everything in the subdirs and let create_env pick the task.
+ _subdirs = args.task_subdirs if args.task_subdirs is not None else DEFAULT_TASK_SUBFOLDERS
+ auto_discover_and_create_cfgs(task_dir=TASK_DIR,task_subdirs=_subdirs,pattern='*.py',env_prefix='',env_postfix='',observations_cfg=Obs(),actions_cfg=DroidJointPositionActionCfg(),robot_cfg=DroidRgbdWristCfg,camera_cfg=[RgbdExternalCameraCfg],lighting_cfg=SphereLightCfg,background_cfg=HomeOfficeBackgroundCfg,contact_gripper=contact_gripper,dt=1/(60*2),render_interval=8,decimation=8,seed=1)
  env,cfg=create_env(args.task,device=args.device,num_envs=1,use_fabric=True,policy='tiptop_replay')
  out=Path(args.output_dir); out.mkdir(parents=True,exist_ok=True)
  plan=json.loads(Path(args.plan).read_text())

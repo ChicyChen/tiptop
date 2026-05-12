@@ -16,6 +16,12 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--task', nargs='+', required=True)
 p.add_argument('--output-dir', default='tiptop_robolab_h5')
 p.add_argument('--camera', default='external_cam', choices=['external_cam','wrist_cam'])
+# Task subfolders to glob for class definitions. Robolab's default
+# (`benchmark`, `custom`) doesn't include the long-horizon families,
+# so the canonical robolab-120 export keeps the default while LH-CS /
+# LH-vague runs pass --task-subdirs to add e.g. `long_horizon/common_sense`.
+p.add_argument('--task-subdirs', nargs='+', default=None,
+               help='Robolab task subdirs to search (default: robolab.constants.DEFAULT_TASK_SUBFOLDERS)')
 AppLauncher.add_app_launcher_args(p)
 args,_=p.parse_known_args(); args.enable_cameras=True
 app=AppLauncher(args).app
@@ -64,9 +70,13 @@ class DroidRgbdWristCfg(DroidCfg):
 def _to_np(x):
     return x.detach().cpu().numpy() if hasattr(x,'detach') else np.asarray(x)
 
-def register(tasks):
+def register(tasks, task_subdirs=None):
+    # The `tasks` arg is filtered later via get_envs(task=...). The factory's
+    # auto-discover entry no longer accepts a `tasks=` kwarg (robolab API drift,
+    # 2026-05-11) — it always registers every task file in the given subdirs.
+    subdirs = task_subdirs if task_subdirs is not None else DEFAULT_TASK_SUBFOLDERS
     ObservationCfg=generate_obs_cfg({'image_obs': RgbdImageObsCfg(), 'proprio_obs': ProprioceptionObservationCfg()})
-    auto_discover_and_create_cfgs(task_dir=TASK_DIR, task_subdirs=DEFAULT_TASK_SUBFOLDERS, tasks=tasks, pattern='*.py', env_prefix='', env_postfix='', observations_cfg=ObservationCfg(), actions_cfg=DroidJointPositionActionCfg(), robot_cfg=DroidRgbdWristCfg, camera_cfg=[RgbdExternalCameraCfg], lighting_cfg=SphereLightCfg, background_cfg=HomeOfficeBackgroundCfg, contact_gripper=contact_gripper, dt=1/(60*2), render_interval=8, decimation=8, seed=1)
+    auto_discover_and_create_cfgs(task_dir=TASK_DIR, task_subdirs=subdirs, pattern='*.py', env_prefix='', env_postfix='', observations_cfg=ObservationCfg(), actions_cfg=DroidJointPositionActionCfg(), robot_cfg=DroidRgbdWristCfg, camera_cfg=[RgbdExternalCameraCfg], lighting_cfg=SphereLightCfg, background_cfg=HomeOfficeBackgroundCfg, contact_gripper=contact_gripper, dt=1/(60*2), render_interval=8, decimation=8, seed=1)
 
 def intrinsics_from_cfg(width, height, focal_length, h_aperture, v_aperture):
     fx = focal_length / h_aperture * width
@@ -115,7 +125,7 @@ def export_one(env, cfg, env_name, out_dir):
     (d/'metadata.json').write_text(json.dumps(meta,indent=2)); print('EXPORT',env_name,h5); return meta
 
 def main():
-    out=Path(args.output_dir).resolve(); out.mkdir(parents=True,exist_ok=True); register(args.task); metas=[]
+    out=Path(args.output_dir).resolve(); out.mkdir(parents=True,exist_ok=True); register(args.task, task_subdirs=args.task_subdirs); metas=[]
     for env_name in get_envs(task=args.task):
         env,cfg=create_env(env_name,device=args.device,num_envs=1,use_fabric=True,policy='tiptop_h5_export')
         try: metas.append(export_one(env,cfg,env_name,out))

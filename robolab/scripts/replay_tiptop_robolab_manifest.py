@@ -52,6 +52,8 @@ def main():
     p.add_argument('--shards', type=int, default=1)
     p.add_argument('--shard-idx', type=int, default=0)
     p.add_argument('--worker-tag', default='w0')
+    p.add_argument('--task-subdirs', nargs='+', default=None,
+                   help='Forwarded to replay_tiptop_plan_robolab.py; lets LH-CS / LH-vague tasks resolve.')
     p.add_argument(
         '--robolab-python',
         default=os.environ.get('ROBOLAB_PYTHON', ''),
@@ -111,6 +113,8 @@ def main():
                '--output-dir', str(task_out), '--camera', args.camera,
                '--stride', str(args.stride), '--max-joint-step', str(args.max_joint_step),
                '--gripper-steps', str(args.gripper_steps), '--post-steps', str(args.post_steps)]
+        if args.task_subdirs:
+            cmd += ['--task-subdirs', *args.task_subdirs]
         print(f'[{tag} {i}/{len(items)}] REPLAY {env}', flush=True)
         t = time.time(); rc = None; err = None
         try:
