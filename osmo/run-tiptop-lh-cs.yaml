@@ -329,20 +329,45 @@ workflow:
               || { echo "[run] export FAILED for $scene trial $trial"; continue; }
 
             # Step 2: TiPToP planning (pixi env, Python 3.12).
+            #
+            # Call the SINGLE-task runner directly. The batch runner
+            # (run_tiptop_robolab120_h5_deeper.py) shells back out through
+            # `~/.pixi/bin/pixi` which doesn't exist on osmo (pixi lives
+            # under $PIXI_HOME=$LUSTRE_DIR/.pixi). We have one scene per
+            # trial here, so no batching needed.
             PLAN_DIR=$TRIAL_DIR/plan
             mkdir -p "$PLAN_DIR"
+            # Pull the single manifest entry's h5_path + instruction.
+            MANIFEST_JSON="$H5_DIR/manifest.json"
+            H5_PATH=$(python3 -c "import json,sys; m=json.load(open(sys.argv[1])); print((m[0] if isinstance(m,list) else m)['h5_path'])" "$MANIFEST_JSON")
+            INSTR=$(python3 -c "import json,sys; m=json.load(open(sys.argv[1])); print((m[0] if isinstance(m,list) else m)['instruction'])" "$MANIFEST_JSON")
+            TIPTOP_GRASP_DEEPER_M=0.015 \
             TIPTOP_LLM_BACKEND={{llm_backend}} \
               pixi run --manifest-path $TIPTOP_DIR/pixi.toml \
-                python $TIPTOP_DIR/robolab/scripts/run_tiptop_robolab120_h5_deeper.py \
-                  --manifest "$H5_DIR/manifest.json" \
+                python $TIPTOP_DIR/robolab/scripts/tiptop_h5_gemini_deeper_runner.py \
+                  --h5-path "$H5_PATH" \
+                  --task-instruction "$INSTR" \
                   --output-dir "$PLAN_DIR" \
-                  --timeout-s 900 \
                   --max-planning-time 20 \
                   --num-particles 64 \
                   --opt-steps-per-skeleton 100 \
-                  --grasp-deeper-m 0.015 \
-                  --mem-cap-gb 24 \
               || echo "[run] planning exited non-zero for $scene trial $trial (partial results may exist)"
+            # Synthesize a summary.json so the replay manifest driver can
+            # find this plan (it expects [{env_name, run_dir, has_plan}]).
+            PLAN_TS_DIR=$(find "$PLAN_DIR" -maxdepth 1 -mindepth 1 -type d | head -1)
+            if [ -n "$PLAN_TS_DIR" ] && [ -f "$PLAN_TS_DIR/tiptop_plan.json" ]; then
+              python3 -c "
+import json
+print(json.dumps([{
+    'env_name': '$scene',
+    'run_dir': '$PLAN_TS_DIR',
+    'has_plan': True,
+}]))
+" > "$PLAN_DIR/summary.json"
+            else
+              echo "[run] no tiptop_plan.json — replay will skip this scene/trial"
+              echo '[]' > "$PLAN_DIR/summary.json"
+            fi
 
             # Step 3: RoboLab replay (Isaac Sim).
             REPLAY_DIR=$TRIAL_DIR/replay
