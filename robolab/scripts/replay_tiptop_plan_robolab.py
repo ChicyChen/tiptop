@@ -41,7 +41,13 @@ try:
  from robolab.robots.droid import DroidCfg,DroidJointPositionActionCfg,ProprioceptionObservationCfg,contact_gripper
  from robolab.variations.backgrounds import HomeOfficeBackgroundCfg
  from robolab.variations.lighting import SphereLightCfg
- from robolab.core.logging.results import get_all_env_subtask_infos
+ # Robolab API drift 2026-05-12: `get_all_env_subtask_infos` was renamed to
+ # `get_final_subtask_info` (singular). Fall back if either is missing.
+ try:
+     from robolab.core.logging.results import get_final_subtask_info as _get_subtask_info
+ except ImportError:
+     from robolab.core.logging.results import get_all_env_subtask_infos as _get_subtask_info
+ get_all_env_subtask_infos = _get_subtask_info
 
  @configclass
  class RgbdExternalCameraCfg:
