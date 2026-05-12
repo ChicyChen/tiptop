@@ -206,12 +206,16 @@ workflow:
 
         if ! conda env list | grep -q "^m2t2 "; then
           echo "[setup] building m2t2 conda env (one-time, ~10-15 min)"
-          conda create -n m2t2 python=3.10 -y
+          # Anaconda's main + r channels now require TOS acceptance; use
+          # conda-forge exclusively to bypass that. Recent conda
+          # versions reject `conda create -n ... python=3.10 -y` against
+          # the implicit default channels with `CondaToSNonInteractiveError`.
+          conda create -n m2t2 -c conda-forge --override-channels python=3.10 -y
           conda run -n m2t2 pip install 'setuptools<70'
           conda run -n m2t2 pip install torch==2.0.1 torchvision==0.15.2 \
             --index-url https://download.pytorch.org/whl/cu117
-          conda install -n m2t2 -c nvidia/label/cuda-11.7.0 -y cuda-toolkit
-          conda install -n m2t2 -c conda-forge -y "gcc_linux-64<12" "gxx_linux-64<12"
+          conda install -n m2t2 --override-channels -c nvidia/label/cuda-11.7.0 -y cuda-toolkit
+          conda install -n m2t2 --override-channels -c conda-forge -y "gcc_linux-64<12" "gxx_linux-64<12"
           conda run -n m2t2 bash -c "
             export CUDA_HOME=\$CONDA_PREFIX PATH=\$CONDA_PREFIX/bin:\$PATH
             pip install --no-build-isolation $M2T2_DIR/pointnet2_ops/
