@@ -6,7 +6,7 @@ writes TiPToP H5 observations.  No object/world GT is exported.
 """
 from __future__ import annotations
 
-import argparse, json, sys, traceback
+import argparse, json, os, sys, traceback
 from pathlib import Path
 import cv2  # noqa
 import h5py, numpy as np
@@ -31,7 +31,12 @@ import isaaclab.envs.mdp as mdp
 from isaaclab.managers import ObservationGroupCfg as ObsGroup, ObservationTermCfg as ObsTerm, SceneEntityCfg
 from isaaclab.sensors import TiledCameraCfg
 from isaaclab.utils import configclass
-from robolab.constants import DEFAULT_TASK_SUBFOLDERS, TASK_DIR
+from robolab.constants import DEFAULT_TASK_SUBFOLDERS, TASK_DIR, set_output_dir
+# Per-process output dir lets parallel pods avoid colliding on robolab's
+# default `<robolab>/output/data.hdf5` (Lustre locking BlockingIOError).
+_robolab_out = os.environ.get('ROBOLAB_OUTPUT_DIR')
+if _robolab_out:
+    set_output_dir(_robolab_out)
 from robolab.core.environments.factory import auto_discover_and_create_cfgs, get_envs
 from robolab.core.environments.runtime import create_env
 from robolab.core.observations.observation_utils import generate_obs_cfg

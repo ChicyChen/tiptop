@@ -31,7 +31,10 @@ try:
  from isaaclab.managers import ObservationGroupCfg as ObsGroup, ObservationTermCfg as ObsTerm, SceneEntityCfg
  from isaaclab.sensors import TiledCameraCfg
  from isaaclab.utils import configclass
- from robolab.constants import DEFAULT_TASK_SUBFOLDERS,TASK_DIR
+ from robolab.constants import DEFAULT_TASK_SUBFOLDERS,TASK_DIR,set_output_dir
+ _robolab_out = os.environ.get('ROBOLAB_OUTPUT_DIR')
+ if _robolab_out:
+     set_output_dir(_robolab_out)
  from robolab.core.environments.factory import auto_discover_and_create_cfgs
  from robolab.core.environments.runtime import create_env
  from robolab.core.observations.observation_utils import generate_obs_cfg, unpack_image_obs

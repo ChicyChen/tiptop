@@ -327,8 +327,14 @@ workflow:
             echo "============================================================"
 
             # Step 1: export H5 (Isaac Sim).
+            #
+            # ROBOLAB_OUTPUT_DIR scopes robolab's RecorderManager output
+            # to a per-trial dir; without it parallel pods all race on
+            # `<robolab>/output/data.hdf5` (Lustre BlockingIOError).
             H5_DIR=$TRIAL_DIR/h5
-            mkdir -p "$H5_DIR"
+            ROB_OUT=$TRIAL_DIR/robolab_output
+            mkdir -p "$H5_DIR" "$ROB_OUT"
+            ROBOLAB_OUTPUT_DIR="$ROB_OUT" \
             $ISAAC_PY $TIPTOP_DIR/robolab/scripts/export_robolab_tiptop_h5_rgbd.py \
               --headless \
               --task "$scene" \
@@ -375,6 +381,7 @@ workflow:
             REPLAY_DIR=$TRIAL_DIR/replay
             mkdir -p "$REPLAY_DIR"
             if [ -f "$PLAN_DIR/summary.json" ]; then
+              ROBOLAB_OUTPUT_DIR="$ROB_OUT" \
               $ISAAC_PY $TIPTOP_DIR/robolab/scripts/replay_tiptop_robolab_manifest.py \
                 --planning-summary "$PLAN_DIR/summary.json" \
                 --output-dir "$REPLAY_DIR" \
