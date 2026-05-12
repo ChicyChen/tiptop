@@ -22,10 +22,15 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TIPTOP_REPO="$(cd "$HERE/.." && pwd)"
-ROBOLAB_REPO="${ROBOLAB_REPO:-$(cd "$TIPTOP_REPO/.." && pwd)/robolab_valts}"
-ROBOLAB_PYTHON="${ROBOLAB_PYTHON:-$ROBOLAB_REPO/.venv/bin/python}"
+# ChicyChen fork: default to ../robolab (our fork's checkout) instead of
+# upstream's ../robolab_valts. Override with ROBOLAB_REPO=... if needed.
+ROBOLAB_REPO="${ROBOLAB_REPO:-$(cd "$TIPTOP_REPO/.." && pwd)/robolab}"
+# Our robolab is installed into the `robolab` conda env, not a .venv.
+ROBOLAB_PYTHON="${ROBOLAB_PYTHON:-$(conda run -n robolab which python 2>/dev/null || echo "$ROBOLAB_REPO/.venv/bin/python")}"
 M2T2_REPO="${M2T2_REPO:-$TIPTOP_REPO/../M2T2}"
 M2T2_PORT="${M2T2_PORT:-8123}"
+# M2T2 doesn't ship a pixi.toml; we install it in a conda env per its README.
+M2T2_CONDA_ENV="${M2T2_CONDA_ENV:-m2t2}"
 
 say()  { printf '\033[1;36m[install]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[install]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -42,10 +47,21 @@ command -v pixi >/dev/null || die "pixi not in PATH. Install pixi first: https:/
 [ -x "$ROBOLAB_PYTHON" ] || die "robolab_valts venv python not executable at $ROBOLAB_PYTHON (set ROBOLAB_PYTHON=...)"
 
 # 2. Verify M2T2 install
+# Note: upstream NVlabs/M2T2 doesn't ship `m2t2_server.py` or a pixi.toml.
+# TiPToP actually expects williamshen-nz/m2t2-private (the tiptop author's
+# fork). ChicyChen mirror: https://github.com/ChicyChen/m2t2-tiptop.
 if [ ! -d "$M2T2_REPO" ]; then
   say "M2T2 not found at $M2T2_REPO."
-  say "Clone it first: git clone https://github.com/NVlabs/M2T2 $M2T2_REPO"
-  say "Then 'cd $M2T2_REPO && pixi install' and follow its README."
+  say "Clone first: git clone https://github.com/ChicyChen/m2t2-tiptop $M2T2_REPO"
+  say "Then set up an env per its README:"
+  say "  conda create -n $M2T2_CONDA_ENV python=3.10 -y"
+  say "  conda run -n $M2T2_CONDA_ENV pip install 'setuptools<70'  # for pkg_resources"
+  say "  conda run -n $M2T2_CONDA_ENV pip install torch==2.0.1 torchvision==0.15.2 \\"
+  say "    --index-url https://download.pytorch.org/whl/cu117"
+  say "  conda install -n $M2T2_CONDA_ENV -c nvidia/label/cuda-11.7.0 cuda-toolkit -y"
+  say "  conda run -n $M2T2_CONDA_ENV pip install --no-build-isolation $M2T2_REPO/pointnet2_ops/"
+  say "  conda run -n $M2T2_CONDA_ENV pip install -r $M2T2_REPO/requirements.txt"
+  say "  conda run -n $M2T2_CONDA_ENV pip install $M2T2_REPO"
 fi
 
 # 3. Key file
@@ -66,6 +82,7 @@ export ROBOLAB_REPO="$ROBOLAB_REPO"
 export ROBOLAB_PYTHON="$ROBOLAB_PYTHON"
 export M2T2_REPO="$M2T2_REPO"
 export M2T2_URL="http://localhost:$M2T2_PORT"
+export M2T2_CONDA_ENV="$M2T2_CONDA_ENV"
 EOF
 say "Wrote $TIPTOP_REPO/.env.robolab"
 
@@ -75,8 +92,8 @@ if [ "${START_M2T2:-0}" = "1" ]; then
   if tmux has-session -t m2t2_server 2>/dev/null; then
     say "M2T2 server tmux session already exists (tmux attach -t m2t2_server)."
   else
-    tmux new-session -d -s m2t2_server "cd $M2T2_REPO && pixi run python m2t2_server.py --port $M2T2_PORT"
-    say "Started M2T2 server tmux session 'm2t2_server' on port $M2T2_PORT."
+    tmux new-session -d -s m2t2_server "cd $M2T2_REPO && conda run --no-capture-output -n $M2T2_CONDA_ENV python m2t2_server.py --port $M2T2_PORT"
+    say "Started M2T2 server tmux session 'm2t2_server' on port $M2T2_PORT (conda env: $M2T2_CONDA_ENV)."
   fi
 fi
 

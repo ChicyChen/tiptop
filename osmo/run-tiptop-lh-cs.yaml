@@ -1,0 +1,410 @@
+# TiPToP eval on robolab LH common-sense tasks (osmo).
+#
+# Each pod runs N scenes × M trials sequentially on one GPU. The
+# TiPToP pixi env + M2T2 conda env + M2T2 weights persist on Lustre
+# across pods, so the second submission to the same {{user_name}}
+# bypasses install/predownload.
+#
+# Submit a batch (each batch_name maps to a fixed 3-scene tuple inside
+# entry.sh's case statement — list below mirrors cap-x's cs-batch-N).
+#
+#   smoke (1 scene, single trial):
+#     osmo workflow submit osmo/run-tiptop-lh-cs.yaml \
+#         --pool isaac-srl-l40-04 \
+#         --set-string batch_name=smoke \
+#         --set trials=1
+#     → workflow name: tiptop-robolab-smoke
+#
+#   full batch (3 scenes × {{trials}} trials):
+#     osmo workflow submit osmo/run-tiptop-lh-cs.yaml \
+#         --pool isaac-srl-l40-04 \
+#         --set-string batch_name=cs-batch-0 \
+#         --set trials=3
+#     → workflow name: tiptop-robolab-cs-batch-0
+#
+# LLM backend is `nvidia` by default (NVIDIA inference →
+# gcp/google/gemini-2.5-flash). Pass --set-string llm_backend=gemini
+# + a GOOGLE_API_KEY credential to use the paper-faithful
+# gemini-robotics-er-1.5-preview model (requires Google AI Studio
+# early-access). See robolab/scripts/tiptop_h5_gemini_deeper_runner.py.
+#
+# Outputs land on Lustre at
+#   /mnt/amlfs-04/home/{{user_name}}/tiptop-results/<scene>/<run_ts>/trial_<N>/
+# Per-trial dir contains tiptop's native artifacts (planning summary,
+# replay metrics, replay.mp4). The dashboard converter
+# (vlm-orchestrator/scripts/score_tiptop_with_aspect1.py — task #4)
+# walks these and emits cap-x-shape metadata.json + task_failures.jsonl.
+
+workflow:
+  name: tiptop-robolab-{{batch_name}}
+  tasks:
+  - name: tiptop-trial
+    image: nvcr.io/nvidia/isaac-lab:2.2.0
+    command: ["bash"]
+    args: ["/tmp/entry.sh"]
+    environment:
+      ACCEPT_EULA: Y
+      NO_NUCLEUS: Y
+    credentials:
+      github-pat: /tmp/github
+      hf-token: /tmp/hf
+      nvidia-api-key: /tmp/nvidia
+    files:
+    - path: /tmp/setup_github_auth.sh
+      contents: |-
+        # Configure git to use the PAT for HTTPS clones of ChicyChen/tiptop
+        # and ChicyChen/m2t2-tiptop. Same payload-key-vs-name caveat as cap-x.
+        echo "[auth] /tmp/github contents: $(ls /tmp/github/ 2>&1)"
+        GH_FILE=$(ls /tmp/github/ 2>/dev/null | head -1)
+        if [ -z "$GH_FILE" ]; then
+          echo "[auth] FATAL: /tmp/github is empty — credential not mounted"
+          exit 1
+        fi
+        GH_PAT=$(cat "/tmp/github/$GH_FILE")
+        git config --global credential.helper store
+        echo "https://ChicyChen:${GH_PAT}@github.com" > ~/.git-credentials
+        git config --global credential.helper 'store --file ~/.git-credentials'
+
+    - path: /tmp/predownload_m2t2.py
+      contents: |-
+        # Pre-warm M2T2's m2t2.pth checkpoint (~340 MB) onto Lustre so the
+        # server's first-run load is a cache hit. We download to $HF_HOME
+        # via snapshot_download and symlink into $M2T2_DIR/weights/ in
+        # entry.sh.
+        #
+        # hf_transfer + Xet-disabled mirrors cap-x's setup (better
+        # first-run throughput on a cold cache).
+        import os
+        os.environ["HF_HUB_DISABLE_XET"] = "1"
+        os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+        from huggingface_hub import snapshot_download
+        token = os.environ.get("HF_TOKEN")
+        print("[predownload] wentao-yuan/m2t2 (m2t2.pth) ...", flush=True)
+        path = snapshot_download(
+            "wentao-yuan/m2t2",
+            allow_patterns=["m2t2.pth"],
+            token=token,
+            max_workers=8,
+        )
+        print(f"[predownload] wentao-yuan/m2t2 done → {path}", flush=True)
+
+    - path: /tmp/entry.sh
+      contents: |
+        set -e
+        echo "batch_name  : {{batch_name}}"
+        echo "trials      : {{trials}}"
+        echo "user_name   : {{user_name}}"
+        echo "llm_backend : {{llm_backend}}"
+        date
+
+        # Hide conflicting Vulkan files before Isaac Sim starts.
+        if [ -e "/usr/share/vulkan" ] && [ -e "/etc/vulkan" ]; then
+          mv /usr/share/vulkan /usr/share/vulkan_hidden
+        fi
+
+        apt update
+        # python3-dev: for any source-built deps (matches cap-x).
+        # tmux: M2T2 server background session.
+        # curl/ca-certificates: pixi installer.
+        apt install -y openssh-server git tmux vim htop git-lfs iputils-ping ffmpeg python3-venv python3-dev build-essential curl ca-certificates
+        mkdir -p /run/sshd
+        sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sed -i 's/#PermitEmptyPasswords.*/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+        echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+        echo 'PermitEmptyPasswords yes' >> /etc/ssh/sshd_config
+        passwd -d root
+        /sbin/sshd
+
+        bash /tmp/setup_github_auth.sh
+
+        export LUSTRE_USER={{user_name}}
+        export LUSTRE_DIR=/mnt/amlfs-04/home/{{user_name}}
+        export ROBOLAB_DIR=$LUSTRE_DIR/robolab
+        export TIPTOP_DIR=$LUSTRE_DIR/tiptop
+        export M2T2_DIR=$LUSTRE_DIR/M2T2
+        export VLM_ORCH_DIR=$LUSTRE_DIR/vlm-orchestrator
+
+        echo "[auth] /tmp/hf: $(ls /tmp/hf/ 2>&1)  /tmp/nvidia: $(ls /tmp/nvidia/ 2>&1)"
+        HF_FILE=$(ls /tmp/hf/ 2>/dev/null | head -1)
+        NV_FILE=$(ls /tmp/nvidia/ 2>/dev/null | head -1)
+        export HF_TOKEN=$(cat "/tmp/hf/$HF_FILE" 2>/dev/null)
+        export NVIDIA_API_KEY=$(cat "/tmp/nvidia/$NV_FILE" 2>/dev/null)
+
+        # ---------------------------------------------------------- #
+        # Sync ChicyChen forks of tiptop + m2t2-tiptop into Lustre.
+        # Race-safe pattern lifted from cap-x.
+        # ---------------------------------------------------------- #
+        (
+          flock -x 200
+          if [ ! -d "$TIPTOP_DIR/.git" ]; then
+            echo "[setup] cloning ChicyChen/tiptop → $TIPTOP_DIR"
+            git clone --recurse-submodules \
+              -b feat/our-robolab \
+              https://github.com/ChicyChen/tiptop.git "$TIPTOP_DIR"
+          else
+            echo "[setup] updating tiptop in $TIPTOP_DIR"
+            cd "$TIPTOP_DIR"
+            rm -f .git/index.lock
+            git fetch origin
+            git reset --hard origin/feat/our-robolab
+            git submodule update --init --recursive
+          fi
+        ) 200>"$LUSTRE_DIR/.lock-tiptop"
+
+        (
+          flock -x 200
+          if [ ! -d "$M2T2_DIR/.git" ]; then
+            echo "[setup] cloning ChicyChen/m2t2-tiptop → $M2T2_DIR"
+            git clone https://github.com/ChicyChen/m2t2-tiptop.git "$M2T2_DIR"
+          else
+            echo "[setup] updating M2T2 in $M2T2_DIR"
+            cd "$M2T2_DIR"
+            rm -f .git/index.lock
+            git fetch origin
+            git reset --hard origin/master
+          fi
+        ) 200>"$LUSTRE_DIR/.lock-m2t2"
+
+        if [ ! -d "$ROBOLAB_DIR" ]; then
+          echo "[setup] FATAL: robolab not found at $ROBOLAB_DIR"
+          exit 1
+        fi
+
+        # ---------------------------------------------------------- #
+        # Install pixi for tiptop. Isaac Sim's python is 3.10; tiptop
+        # pins python=3.12 via pixi. We install pixi into Lustre so
+        # subsequent pods reuse the env without re-downloading.
+        # ---------------------------------------------------------- #
+        export PIXI_HOME=$LUSTRE_DIR/.pixi
+        export PATH=$PIXI_HOME/bin:$PATH
+        if ! command -v pixi >/dev/null; then
+          echo "[setup] installing pixi → $PIXI_HOME"
+          curl -fsSL https://pixi.sh/install.sh | bash
+        else
+          echo "[setup] pixi already installed at $(command -v pixi)"
+        fi
+
+        echo "[setup] pixi install for tiptop (Python 3.12 + cuda-12 + pytorch-gpu)"
+        cd "$TIPTOP_DIR"
+        pixi install 2>&1 | tail -5
+
+        # ---------------------------------------------------------- #
+        # Build M2T2 conda env per its README. Uses CUDA 11.7 +
+        # torch 2.0.1 (M2T2's pointnet2_ops doesn't build cleanly on
+        # newer CUDAs). Persisted on Lustre via miniconda installed
+        # under $LUSTRE_DIR.
+        # ---------------------------------------------------------- #
+        export CONDA_PREFIX_ROOT=$LUSTRE_DIR/miniconda3
+        export PATH=$CONDA_PREFIX_ROOT/bin:$PATH
+        if [ ! -d "$CONDA_PREFIX_ROOT" ]; then
+          echo "[setup] installing miniconda → $CONDA_PREFIX_ROOT"
+          curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+            -o /tmp/miniconda.sh
+          bash /tmp/miniconda.sh -b -p "$CONDA_PREFIX_ROOT"
+        fi
+        source "$CONDA_PREFIX_ROOT/etc/profile.d/conda.sh"
+
+        if ! conda env list | grep -q "^m2t2 "; then
+          echo "[setup] building m2t2 conda env (one-time, ~10-15 min)"
+          conda create -n m2t2 python=3.10 -y
+          conda run -n m2t2 pip install 'setuptools<70'
+          conda run -n m2t2 pip install torch==2.0.1 torchvision==0.15.2 \
+            --index-url https://download.pytorch.org/whl/cu117
+          conda install -n m2t2 -c nvidia/label/cuda-11.7.0 -y cuda-toolkit
+          conda install -n m2t2 -c conda-forge -y "gcc_linux-64<12" "gxx_linux-64<12"
+          conda run -n m2t2 bash -c "
+            export CUDA_HOME=\$CONDA_PREFIX PATH=\$CONDA_PREFIX/bin:\$PATH
+            pip install --no-build-isolation $M2T2_DIR/pointnet2_ops/
+            pip install -r $M2T2_DIR/requirements.txt
+            pip install -e $M2T2_DIR
+            # torch 2.0.1 predates numpy 2.0; from_numpy raises
+            # 'Numpy is not available' if numpy>=2 sneaks in via deps.
+            # Pin AFTER editable install so it overrides requirements.txt.
+            pip install 'numpy<2'
+          "
+        else
+          echo "[setup] m2t2 conda env already exists"
+        fi
+
+        # ---------------------------------------------------------- #
+        # Pre-warm M2T2 checkpoint on Lustre; symlink into M2T2/weights.
+        # ---------------------------------------------------------- #
+        export HF_HOME=$LUSTRE_DIR/hf_cache
+        mkdir -p "$HF_HOME"
+        ISAAC_PY=/workspace/isaaclab/_isaac_sim/python.sh
+        $ISAAC_PY -m pip install --quiet huggingface_hub hf_transfer
+        $ISAAC_PY /tmp/predownload_m2t2.py
+        M2T2_CKPT=$(find "$HF_HOME" -name 'm2t2.pth' | head -1)
+        if [ -z "$M2T2_CKPT" ]; then
+          echo "[setup] FATAL: m2t2.pth not found under $HF_HOME after predownload"
+          exit 1
+        fi
+        mkdir -p "$M2T2_DIR/weights"
+        ln -sf "$M2T2_CKPT" "$M2T2_DIR/weights/m2t2.pth"
+        echo "[setup] m2t2.pth → $M2T2_DIR/weights/m2t2.pth → $M2T2_CKPT"
+
+        # ---------------------------------------------------------- #
+        # Install robolab into Isaac Sim's python (for steps 1+3).
+        # ---------------------------------------------------------- #
+        echo "[install] robolab into Isaac Sim python (--no-deps; isaaclab/isaacsim already in container)"
+        cd "$ROBOLAB_DIR"
+        $ISAAC_PY -m pip install --no-deps -e .
+        $ISAAC_PY -m pip install json_numpy pyzmq tyro trimesh==4.5.1 h5py opencv-python
+
+        # ---------------------------------------------------------- #
+        # Start M2T2 server in tmux on port 8123.
+        # ---------------------------------------------------------- #
+        mkdir -p /tmp/tiptop_servers
+        echo "[m2t2] launching m2t2_server.py on :8123"
+        tmux new-session -d -s m2t2 \
+            "cd $M2T2_DIR && \
+             $CONDA_PREFIX_ROOT/bin/conda run --no-capture-output -n m2t2 \
+                python m2t2_server.py --port 8123 \
+                > /tmp/tiptop_servers/m2t2.log 2>&1; sleep infinity"
+        # Wait up to 5 min for port bind.
+        for i in $(seq 1 30); do
+          if (echo > /dev/tcp/127.0.0.1/8123) >/dev/null 2>&1; then
+            echo "[m2t2] :8123 ready (after ${i}0s)"
+            break
+          fi
+          sleep 10
+        done
+
+        # Source the tiptop .env.robolab so the runner picks up M2T2_URL etc.
+        cd "$TIPTOP_DIR"
+        ROBOLAB_REPO=$ROBOLAB_DIR ROBOLAB_PYTHON=$ISAAC_PY \
+          M2T2_REPO=$M2T2_DIR M2T2_PORT=8123 \
+          M2T2_CONDA_ENV=m2t2 \
+          bash robolab/install_robolab.sh
+        source "$TIPTOP_DIR/.env.robolab"
+
+        # ---------------------------------------------------------- #
+        # Batch dispatch (mirrors cap-x cs-batch-0..9 task tuples).
+        # ---------------------------------------------------------- #
+        RUN_TS=$(date -u +%Y%m%dT%H%M%SZ)
+        echo "[run] batch={{batch_name}} run_ts=$RUN_TS trials={{trials}} llm_backend={{llm_backend}}"
+
+        case "{{batch_name}}" in
+          cs-batch-0)
+            SCENE_ARR=(InferClearTableTask InferConsolidateTask InferJoinGroupTask) ;;
+          cs-batch-1)
+            SCENE_ARR=(InferMajorityGroupTask InferReturnStrayTask InferShelfFallenTask) ;;
+          cs-batch-2)
+            SCENE_ARR=(InferTripleSortTask KitBalanceBinsTask KitCanFruitPairTask) ;;
+          cs-batch-3)
+            SCENE_ARR=(KitEqualFruitsTask KitFruitUtensilTask KitLunchPairsTask) ;;
+          cs-batch-4)
+            SCENE_ARR=(KitShelfRestockTask KitThreeBinsBlocksTask KitUtensilSetsTask) ;;
+          cs-batch-5)
+            SCENE_ARR=(RecoverCanAmongFruitsTask RecoverFallenFruitTask RecoverFruitAmongCansTask) ;;
+          cs-batch-6)
+            SCENE_ARR=(RecoverMisplacedTask RecoverNonFoodInBinTask RecoverSpillTask) ;;
+          cs-batch-7)
+            SCENE_ARR=(RecoverToyInBowlTask RecoverWrongShelfTask SortCannedVeggiesAndFruitsTask) ;;
+          cs-batch-8)
+            SCENE_ARR=(SortCondimentsVsCansTask SortFoodAndUtensilsTask SortFoodVsNonFoodTask) ;;
+          cs-batch-9)
+            SCENE_ARR=(SortForksAndSpoonsTask SortFreshVsCannedTask SortProduceAndDairyTask) ;;
+          smoke)
+            SCENE_ARR=(InferClearTableTask) ;;
+          *)
+            echo "[run] FATAL: unknown batch_name '{{batch_name}}' — see osmo/run-tiptop-lh-cs.yaml"
+            exit 1 ;;
+        esac
+        echo "[run] scenes: ${SCENE_ARR[*]}"
+
+        # ---------------------------------------------------------- #
+        # Per scene × per trial: export H5 → plan → replay.
+        # Tiptop's pipeline is deterministic given a seed; trials
+        # differ only via the Gemini sampling temperature (default 0
+        # in tiptop upstream — re-check whether multiple trials add
+        # signal or are wasted compute; for now we run {{trials}}
+        # to match cap-x's eval protocol).
+        # ---------------------------------------------------------- #
+        for scene in "${SCENE_ARR[@]}"; do
+          scene=$(echo "$scene" | xargs)
+          for trial in $(seq 1 {{trials}}); do
+            TRIAL_DIR=$LUSTRE_DIR/tiptop-results/$scene/$RUN_TS/trial_$trial
+            mkdir -p "$TRIAL_DIR"
+            echo
+            echo "============================================================"
+            echo "[run] scene=$scene trial=$trial dir=$TRIAL_DIR"
+            echo "============================================================"
+
+            # Step 1: export H5 (Isaac Sim).
+            H5_DIR=$TRIAL_DIR/h5
+            mkdir -p "$H5_DIR"
+            $ISAAC_PY $TIPTOP_DIR/robolab/scripts/export_robolab_tiptop_h5_rgbd.py \
+              --headless \
+              --task "$scene" \
+              --task-subdirs benchmark custom long_horizon/common_sense \
+              --output-dir "$H5_DIR" \
+              --camera external_cam \
+              || { echo "[run] export FAILED for $scene trial $trial"; continue; }
+
+            # Step 2: TiPToP planning (pixi env, Python 3.12).
+            PLAN_DIR=$TRIAL_DIR/plan
+            mkdir -p "$PLAN_DIR"
+            TIPTOP_LLM_BACKEND={{llm_backend}} \
+              pixi run --manifest-path $TIPTOP_DIR/pixi.toml \
+                python $TIPTOP_DIR/robolab/scripts/run_tiptop_robolab120_h5_deeper.py \
+                  --manifest "$H5_DIR/manifest.json" \
+                  --output-dir "$PLAN_DIR" \
+                  --timeout-s 900 \
+                  --max-planning-time 20 \
+                  --num-particles 64 \
+                  --opt-steps-per-skeleton 100 \
+                  --grasp-deeper-m 0.015 \
+                  --mem-cap-gb 24 \
+              || echo "[run] planning exited non-zero for $scene trial $trial (partial results may exist)"
+
+            # Step 3: RoboLab replay (Isaac Sim).
+            REPLAY_DIR=$TRIAL_DIR/replay
+            mkdir -p "$REPLAY_DIR"
+            if [ -f "$PLAN_DIR/summary.json" ]; then
+              $ISAAC_PY $TIPTOP_DIR/robolab/scripts/replay_tiptop_robolab_manifest.py \
+                --planning-summary "$PLAN_DIR/summary.json" \
+                --output-dir "$REPLAY_DIR" \
+                --timeout-s 900 \
+                --stride 4 --max-joint-step 0.03 \
+                --gripper-steps 60 --post-steps 120 \
+                --camera external_cam \
+                --robolab-python "$ISAAC_PY" \
+                || echo "[run] replay exited non-zero for $scene trial $trial"
+            else
+              echo "[run] no plan summary at $PLAN_DIR/summary.json — skipping replay"
+            fi
+
+            echo "[done] $scene trial $trial → $TRIAL_DIR"
+            ls -la "$TRIAL_DIR" || true
+          done  # trials
+
+          # Persist M2T2 server log into the scene dir so failures are
+          # debuggable post-hoc from Lustre. (Per scene rather than per
+          # trial because the server is shared across all trials.)
+          SCENE_DIR=$LUSTRE_DIR/tiptop-results/$scene/$RUN_TS
+          mkdir -p "$SCENE_DIR/_servers"
+          cp -v /tmp/tiptop_servers/*.log "$SCENE_DIR/_servers/" 2>/dev/null || true
+        done
+
+        # Signal osmo we're done.
+        touch /done.txt
+
+        # Linger for ssh-in debugging.
+        sleep 600
+  resources:
+    default:
+      # Single GPU — M2T2 server + Isaac Sim run sequentially per
+      # trial, so 1×L40 (48 GB) is sufficient. Bump to 2 if you
+      # later parallelize trials within a pod.
+      gpu: 1
+      cpu: 12
+      memory: 80Gi
+      storage: 80Gi
+      platform: ovx-l40
+
+default-values:
+  batch_name: smoke
+  trials: 1
+  user_name: siyic
+  llm_backend: nvidia
