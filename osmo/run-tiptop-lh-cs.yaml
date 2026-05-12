@@ -424,6 +424,7 @@ workflow:
                 --stride 4 --max-joint-step 0.03 \
                 --gripper-steps 60 --post-steps 120 \
                 --camera external_cam \
+                --task-subdirs benchmark custom long_horizon/common_sense \
                 --robolab-python "$ISAAC_PY" \
                 || echo "[run] replay exited non-zero for $scene trial $trial"
             else
