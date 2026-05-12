@@ -93,12 +93,26 @@ try:
  first=frame_from_obs(obs); H,W=first.shape[:2]
  writer=cv2.VideoWriter(str(video_path), cv2.VideoWriter_fourcc(*'mp4v'), args.fps, (W,H))
  def write(obs): writer.write(cv2.cvtColor(frame_from_obs(obs), cv2.COLOR_RGB2BGR))
+ # Replay tracks the terminal step's signals so we can synthesize a
+ # results dict at the end (robolab API drift 2026-05-12:
+ # `env.get_env_results()` was removed; canonical idiom is to read
+ # terminated/truncated from env.step(), per `examples/policy/episode.py`).
+ episode_state = {'terminated': False, 'truncated': False, 'info': None}
  def step_action(q7, grip, repeats=1):
   action=np.zeros((1,action_dim),np.float32); action[0,:7]=np.asarray(q7,np.float32); action[0,7]=float(grip)
   act=torch.tensor(action,device=env.device)
   last=None
   for _ in range(repeats):
-   last=env.step(act)[0]; write(last)
+   ret=env.step(act)
+   last=ret[0]
+   write(last)
+   if len(ret) >= 5:
+    _, _, term, trunc, info = ret[:5]
+    if bool(term.any() if hasattr(term, 'any') else term):
+     episode_state['terminated'] = True
+    if bool(trunc.any() if hasattr(trunc, 'any') else trunc):
+     episode_state['truncated'] = True
+    episode_state['info'] = info
   return last
  def command_q(target_q, grip):
   """Send target_q, optionally interpolating from current_q to avoid large target jumps."""
@@ -138,9 +152,23 @@ try:
    for _ in range(args.gripper_steps): obs=step_action(current_q, gripper, 1); executed+=1
  for _ in range(args.post_steps): obs=step_action(current_q, gripper, 1)
  writer.release()
- results=env.get_env_results()
- subtask=get_all_env_subtask_infos(env)
- result={'task':args.task,'instruction':cfg.instruction,'success':bool(results[0].get('success',False)) if results else False,'env_results':results,'subtask_info':subtask,'video':str(video_path),'executed_steps':executed,'stride':args.stride,'max_joint_step':args.max_joint_step}
+ # Robolab API drift: env.get_env_results() no longer exists.
+ # Synthesize an env_results-shaped dict from the terminated/truncated
+ # flags + final subtask info (matches the shape downstream code expects:
+ # list[dict] with at least a 'success' bool).
+ try:
+  subtask=get_all_env_subtask_infos(env)
+ except Exception as _e:
+  subtask=None
+  print(f'[replay] get_subtask_info failed: {_e}', file=sys.stderr)
+ succ_bool=bool(episode_state.get('terminated', False)) and not bool(episode_state.get('truncated', False))
+ results=[{
+  'env_name': args.task,
+  'success': succ_bool,
+  'terminated': bool(episode_state.get('terminated', False)),
+  'truncated': bool(episode_state.get('truncated', False)),
+ }]
+ result={'task':args.task,'instruction':cfg.instruction,'success':succ_bool,'env_results':results,'subtask_info':subtask,'video':str(video_path),'executed_steps':executed,'stride':args.stride,'max_joint_step':args.max_joint_step}
  (out/'result.json').write_text(json.dumps(result,indent=2,default=str))
  print(json.dumps(result,indent=2,default=str))
  env.close(); app.close()
