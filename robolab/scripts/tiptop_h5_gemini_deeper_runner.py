@@ -5,8 +5,29 @@ from pathlib import Path
 # Allow sibling imports (tiptop_gemini_model_patch) when invoked as a script.
 _here = Path(__file__).resolve().parent
 if str(_here) not in sys.path: sys.path.insert(0, str(_here))
-from tiptop_gemini_model_patch import apply_patch
-apply_patch()
+# LLM backend dispatch.
+#
+# Default = `nvidia` → routes via NVIDIA inference API (OpenAI-compat) using
+# `gcp/google/gemini-2.5-flash`. The tiptop paper used
+# `gemini-robotics-er-1.5-preview` but that preview model is not exposed
+# on NVIDIA inference — and we'd need a separate Google AI Studio
+# early-access key. `gemini-2.5-flash` is the same fallback the tiptop
+# maintainer used in his own runs when robotics-ER returned 404.
+#
+# Set TIPTOP_LLM_BACKEND=gemini to route directly through Google GenAI
+# instead (requires GOOGLE_API_KEY; pair with TIPTOP_GEMINI_MODEL=
+# gemini-robotics-er-1.5-preview for the paper-faithful model).
+_llm_backend = os.environ.get('TIPTOP_LLM_BACKEND', 'nvidia').lower()
+if _llm_backend == 'gemini':
+    from tiptop_gemini_model_patch import apply_patch
+    apply_patch()
+    print(f"[tiptop-runner] LLM backend = gemini "
+          f"(model={os.environ.get('TIPTOP_GEMINI_MODEL', 'gemini-robotics-er-1.5-preview')})")
+else:
+    from tiptop_nvidia_model_patch import apply_patch
+    apply_patch()
+    print(f"[tiptop-runner] LLM backend = nvidia "
+          f"(model={os.environ.get('TIPTOP_NVIDIA_MODEL', 'gcp/google/gemini-2.5-flash')})")
 # Disable M2T2 hard-coded real-robot workspace bounds for RoboLab coordinates.
 import tiptop.perception.m2t2 as _m2t2
 _orig_generate_grasps_async = _m2t2.generate_grasps_async
