@@ -189,46 +189,30 @@ workflow:
         pixi install 2>&1 | tail -5
 
         # ---------------------------------------------------------- #
-        # Build M2T2 conda env per its README. Uses CUDA 11.7 +
-        # torch 2.0.1 (M2T2's pointnet2_ops doesn't build cleanly on
-        # newer CUDAs). Persisted on Lustre via miniconda installed
-        # under $LUSTRE_DIR.
+        # Build M2T2 pixi env. Uses CUDA 11.7 + torch 2.0.1 (M2T2's
+        # pointnet2_ops doesn't build cleanly on newer CUDAs). pixi
+        # cache lives at $PIXI_HOME and is shared with the tiptop env;
+        # M2T2's own pixi.toml lives in our ChicyChen/m2t2-tiptop fork.
+        #
+        # First run: ~5-8 min for the conda-forge + nvidia downloads,
+        # then ~2-3 min for `pixi run build` (torch wheels + pointnet2_ops).
         # ---------------------------------------------------------- #
-        export CONDA_PREFIX_ROOT=$LUSTRE_DIR/miniconda3
-        export PATH=$CONDA_PREFIX_ROOT/bin:$PATH
-        if [ ! -d "$CONDA_PREFIX_ROOT" ]; then
-          echo "[setup] installing miniconda → $CONDA_PREFIX_ROOT"
-          curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-            -o /tmp/miniconda.sh
-          bash /tmp/miniconda.sh -b -p "$CONDA_PREFIX_ROOT"
-        fi
-        source "$CONDA_PREFIX_ROOT/etc/profile.d/conda.sh"
-
-        if ! conda env list | grep -q "^m2t2 "; then
-          echo "[setup] building m2t2 conda env (one-time, ~10-15 min)"
-          # Anaconda's main + r channels now require TOS acceptance; use
-          # conda-forge exclusively to bypass that. Recent conda
-          # versions reject `conda create -n ... python=3.10 -y` against
-          # the implicit default channels with `CondaToSNonInteractiveError`.
-          conda create -n m2t2 -c conda-forge --override-channels python=3.10 -y
-          conda run -n m2t2 pip install 'setuptools<70'
-          conda run -n m2t2 pip install torch==2.0.1 torchvision==0.15.2 \
-            --index-url https://download.pytorch.org/whl/cu117
-          conda install -n m2t2 --override-channels -c nvidia/label/cuda-11.7.0 -y cuda-toolkit
-          conda install -n m2t2 --override-channels -c conda-forge -y "gcc_linux-64<12" "gxx_linux-64<12"
-          conda run -n m2t2 bash -c "
-            export CUDA_HOME=\$CONDA_PREFIX PATH=\$CONDA_PREFIX/bin:\$PATH
-            pip install --no-build-isolation $M2T2_DIR/pointnet2_ops/
-            pip install -r $M2T2_DIR/requirements.txt
-            pip install -e $M2T2_DIR
-            # torch 2.0.1 predates numpy 2.0; from_numpy raises
-            # 'Numpy is not available' if numpy>=2 sneaks in via deps.
-            # Pin AFTER editable install so it overrides requirements.txt.
-            pip install 'numpy<2'
-          "
+        cd "$M2T2_DIR"
+        if [ ! -d "$M2T2_DIR/.pixi/envs/default" ]; then
+          echo "[setup] pixi install for M2T2 (Python 3.10 + cuda-11.7 + gcc<12)"
+          pixi install 2>&1 | tail -5
         else
-          echo "[setup] m2t2 conda env already exists"
+          echo "[setup] M2T2 pixi env already populated"
         fi
+
+        # `pixi run build` is idempotent (pip skips installed packages).
+        # Re-run it every entry so that an updated requirements.txt or a
+        # new fork commit gets picked up on subsequent pods.
+        echo "[setup] pixi run build (M2T2 pip install + pointnet2_ops + numpy<2 pin)"
+        pixi run build 2>&1 | tail -10
+
+        # Quick sanity-check: import torch/numpy and verify from_numpy works.
+        pixi run check 2>&1 | tail -5
 
         # ---------------------------------------------------------- #
         # Pre-warm M2T2 checkpoint on Lustre; symlink into M2T2/weights.
@@ -259,11 +243,9 @@ workflow:
         # Start M2T2 server in tmux on port 8123.
         # ---------------------------------------------------------- #
         mkdir -p /tmp/tiptop_servers
-        echo "[m2t2] launching m2t2_server.py on :8123"
+        echo "[m2t2] launching m2t2_server.py on :8123 (pixi env)"
         tmux new-session -d -s m2t2 \
-            "cd $M2T2_DIR && \
-             $CONDA_PREFIX_ROOT/bin/conda run --no-capture-output -n m2t2 \
-                python m2t2_server.py --port 8123 \
+            "cd $M2T2_DIR && pixi run python m2t2_server.py --port 8123 \
                 > /tmp/tiptop_servers/m2t2.log 2>&1; sleep infinity"
         # Wait up to 5 min for port bind.
         for i in $(seq 1 30); do
