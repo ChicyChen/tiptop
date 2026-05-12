@@ -267,3 +267,155 @@ The core TAMP concepts used throughout the codebase:
 - **Solution** - Contains success status, action sequence, and cost
 
 The planning approach is iterative: symbolic search finds candidate task plans, motion validation checks feasibility, and refinement occurs when motions fail.
+
+---
+
+## Running TiPToP as a baseline on robolab tasks (NVIDIA fork — `feat/our-robolab`)
+
+This fork (`ChicyChen/tiptop @ feat/our-robolab`) adapts upstream TiPToP to
+NVIDIA's `robolab` (rather than `robolab_valts`) and adds an osmo workflow so
+the planner can run as an external baseline on the same LH common-sense suite
+the `vlm-orchestrator` dashboard tracks. The companion M2T2 fork is
+`ChicyChen/m2t2-tiptop @ master` (adds `m2t2/__init__.py` + `pixi.toml`).
+
+### Architecture overview
+
+```
+osmo pod (isaac-lab:2.2.0 container)
+├── pixi env @ $LUSTRE_DIR/.pixi              ← tiptop (Python 3.12 + cuRobo + cuTAMP)
+├── pixi env @ $LUSTRE_DIR/M2T2/.pixi          ← M2T2 (Python 3.10 + CUDA 11.7 + torch 2.0)
+├── M2T2 server (port 8123, tmux session)
+└── per scene × per trial:
+     ├── step 1: export_robolab_tiptop_h5_rgbd.py   ($ISAAC_PY, Isaac Sim)
+     ├── step 2: tiptop_h5_gemini_deeper_runner.py  (pixi run, Python 3.12)
+     └── step 3: replay_tiptop_robolab_manifest.py  ($ISAAC_PY, Isaac Sim)
+```
+
+### LLM backend
+
+Single env var swaps the perception VLM:
+- **`TIPTOP_LLM_BACKEND=nvidia`** (default) — `gcp/google/gemini-2.5-flash` via
+  NVIDIA inference API. Free with `NVIDIA_API_KEY`, but bboxes are noticeably
+  worse on synthetic Isaac Sim renders (places boxes in empty image regions
+  with no depth → 0-point object meshes downstream).
+- **`TIPTOP_LLM_BACKEND=gemini`** — direct Google AI Studio API. Default model
+  is `gemini-robotics-er-1.6-preview` (1.5 was retired 2026-05-12). Requires
+  `GOOGLE_API_KEY` (free tier: 20 req/day quota; paid tier: ~$3.60 for full
+  90-episode eval). **This backend is what produced the 3/90 LH-CS number**;
+  the NVIDIA backend gave 0/90 because of bbox misplacement on bowls/containers.
+
+### Submitting an osmo run
+
+```bash
+# osmo credential set-up (one-time)
+osmo credential set google-api-key --type GENERIC --payload google_api_key=$GOOGLE_API_KEY
+
+# Full LH-CS suite (30 tasks × 3 trials = 90 episodes, 10 batches in parallel)
+cd ~/tiptop
+for i in 0 1 2 3 4 5 6 7 8 9; do
+  osmo workflow submit osmo/run-tiptop-lh-cs.yaml \
+    --pool isaac-srl-l40-04 \
+    --set-string batch_name=cs-batch-$i llm_backend=gemini \
+    --set trials=3
+done
+```
+
+The 10 batch tuples (Infer/Kit/Recover/Sort prefixes) mirror cap-x exactly so
+the dashboard buckets remain consistent. Available `batch_name` values:
+`smoke` (1 scene), `cs-batch-{0..9}`. Set `llm_backend=nvidia` to bypass the
+Google API and use NVIDIA inference.
+
+### Replay-only mode (cheap re-runs)
+
+When step 3 needs to be re-run (e.g. after a replay-script bug fix) without
+re-spending Gemini quota:
+
+```bash
+osmo workflow submit osmo/run-tiptop-lh-cs.yaml \
+  --pool isaac-srl-l40-04 \
+  --set-string batch_name=cs-batch-$i replay_only=true \
+  --set trials=3
+```
+
+For each `(scene, trial)`, the entry script globs
+`$LUSTRE_DIR/tiptop-results/<scene>/*/trial_<N>/plan/*/tiptop_plan.json`,
+picks the most recent, skips steps 1+2 entirely, and replays straight from
+that cached plan. Zero LLM calls.
+
+### Post-process to dashboard
+
+After all batches complete:
+
+```bash
+# Sync Lustre → host via osmo's syncer pod (assumes syncer-amlfs04-N is running)
+bash /tmp/tiptop_postprocess.sh
+
+# Or manually:
+osmo workflow port-forward syncer-amlfs04-3 syncer --port 12224:22 &
+rsync -avzP -e "ssh -p 12224 -o StrictHostKeyChecking=no" \
+  root@localhost:/mnt/amlfs-04/home/$USER/tiptop-results/ ~/tiptop-results/
+
+# Build batch JSONs (in vlm-orchestrator)
+cd ~/vlm-orchestrator
+python scripts/build_tiptop_lh_cs_jsons.py --tiptop-root ~/tiptop-results
+python scripts/build_main_results.py
+```
+
+The aggregator picks ONE trial_dir per `trial_idx` per scene — preferring a
+run_ts that contains a successful plan, then falling back to the most recent.
+Replay `result.json` is also searched across all sibling run_ts dirs (replay-only
+runs write a fresh timestamp). Output:
+
+- `~/vlm-orchestrator/results/lh_cs_eval/lh_cs_tiptop_batch_{0..3}.json` — per-batch
+- `~/vlm-orchestrator/results/main_results.html` — dashboard (TiPToP column on the LH-CS row)
+
+### Adapting to a new robolab task suite
+
+The yaml's `case "{{batch_name}}"` block at `osmo/run-tiptop-lh-cs.yaml:~280`
+hard-codes the 30 LH-CS scene tuples. For a new suite (e.g. `lh_vague`,
+`stacking`):
+
+1. Add new `batch_name` entries to that case statement, each binding `SCENE_ARR`
+   to a 1-3 element tuple of robolab task class names. Class names must exist
+   under `~/robolab/robolab/tasks/<subdir>/` and be importable.
+2. If the new tasks live under a non-default subdir (e.g.
+   `long_horizon/vague_intent/`), update **two** `--task-subdirs` invocations
+   in the yaml: the export call (step 1) and the replay manifest call (step 3).
+   The default already includes `benchmark`, `custom`,
+   `long_horizon/common_sense`.
+3. In `vlm-orchestrator/scripts/build_tiptop_lh_cs_jsons.py`, update
+   `PREFIX_TO_BATCH` if your new tasks need a new bucketing scheme.
+4. Submit + post-process exactly as above. The dashboard will show TiPToP on
+   whichever eval-set it has matching `lh_<suite>_tiptop_batch_*.json` files for.
+
+### Things that bit us (lessons learned)
+
+The robolab fork has drifted from what upstream TiPToP was originally built
+against. Each was painful to debug on osmo (~20 min per cycle). If you see
+similar errors on a new tiptop submission, these are the patches in this fork:
+
+| Symptom | Root cause | Fix location |
+|---|---|---|
+| `TypeError: generate_task_env_cfg() got an unexpected keyword argument 'tasks'` | factory dropped `tasks=` filter; classes are now filtered by `get_envs(task=...)` after registration | `register()` in exporter + replay |
+| `ImportError: cannot import name 'get_all_env_subtask_infos'` | renamed to `get_final_subtask_info` (singular) | top of `replay_tiptop_plan_robolab.py` (try/except) |
+| `AttributeError: 'ManagerBasedRLEnv' object has no attribute 'get_env_results'` | method removed; use `terminated`/`truncated` from `env.step()` | `step_action()` in `replay_tiptop_plan_robolab.py` |
+| `BlockingIOError: Unable to synchronously create file ... data.hdf5` | parallel pods racing on `<robolab>/output/data.hdf5` | `ROBOLAB_OUTPUT_DIR=$TRIAL_DIR/robolab_output` env var |
+| `gym.error.NameNotFound: Environment 'X' doesn't exist` | replay subprocess inherits default subdirs only | pass `--task-subdirs benchmark custom long_horizon/<your_subdir>` to the replay manifest driver |
+| `429 RESOURCE_EXHAUSTED ... limit: 20` (Gemini) | free tier preview models = 20 req/day; SDK retries but quota persists | enable paid tier on Google Cloud project (~$3.60 for 90 eps) |
+| `CondaToSNonInteractiveError ... main, r` | conda 25+ requires TOS on default channels | **don't use conda** — use pixi (we already do, but if you switch a sub-env, stay on pixi) |
+
+### Headline result so far
+
+LH-CS (30 tasks × 3 trials = 90 episodes), Robotics-ER 1.6 backend:
+
+```
+Plans succeeded (cuTAMP)        : 12 / 90 = 13.3%
+Replays succeeded (end-to-end)  :  3 / 90 =  3.3%
+```
+
+For comparison, TiPToP's own paper reports 43% planning / 18% end-to-end on
+the simpler robolab-120 benchmark. The LH-CS gap is plausible — those tasks
+have multi-object goals, partial-completion scenes, and bowls/containers
+that stress the segmentation pipeline. The `vlm-orchestrator`-side VLA
+baselines (Pass, VLM+Replan+Grasp, VLM+Replan+Tools, Tool-Chain, CaP-X) run
+on the same 90 episodes and land at 11-41%.
