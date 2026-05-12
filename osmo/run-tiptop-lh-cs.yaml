@@ -187,6 +187,15 @@ workflow:
         echo "[setup] pixi install for tiptop (Python 3.12 + cuda-12 + pytorch-gpu)"
         cd "$TIPTOP_DIR"
         pixi install 2>&1 | tail -5
+        # cuTAMP + cuRobo are pip-installed via tiptop's pixi tasks, not
+        # listed as deps in pixi.toml. Skip if already installed (the
+        # individual install scripts are themselves idempotent).
+        if ! pixi run python -c "import cutamp" >/dev/null 2>&1; then
+          echo "[setup] pixi run setup-planners (install cuRobo + cuTAMP)"
+          pixi run setup-planners 2>&1 | tail -10
+        else
+          echo "[setup] cutamp + curobo already importable"
+        fi
 
         # ---------------------------------------------------------- #
         # Build M2T2 pixi env. Uses CUDA 11.7 + torch 2.0.1 (M2T2's
