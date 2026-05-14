@@ -22,6 +22,10 @@ p.add_argument('--camera', default='external_cam', choices=['external_cam','wris
 # LH-vague runs pass --task-subdirs to add e.g. `long_horizon/common_sense`.
 p.add_argument('--task-subdirs', nargs='+', default=None,
                help='Robolab task subdirs to search (default: robolab.constants.DEFAULT_TASK_SUBFOLDERS)')
+p.add_argument('--instruction-type', default='default',
+               help='Which instruction variant to resolve when the task defines instruction as a '
+                    'dict ("default" | "vague" | "specific" | task-specific keys). Forwarded to '
+                    'robolab.core.environments.runtime.create_env. Defaults to "default".')
 AppLauncher.add_app_launcher_args(p)
 args,_=p.parse_known_args(); args.enable_cameras=True
 app=AppLauncher(args).app
@@ -132,7 +136,7 @@ def export_one(env, cfg, env_name, out_dir):
 def main():
     out=Path(args.output_dir).resolve(); out.mkdir(parents=True,exist_ok=True); register(args.task, task_subdirs=args.task_subdirs); metas=[]
     for env_name in get_envs(task=args.task):
-        env,cfg=create_env(env_name,device=args.device,num_envs=1,use_fabric=True,policy='tiptop_h5_export')
+        env,cfg=create_env(env_name,device=args.device,num_envs=1,use_fabric=True,policy='tiptop_h5_export',instruction_type=args.instruction_type)
         try: metas.append(export_one(env,cfg,env_name,out))
         finally: env.close()
     (out/'manifest.json').write_text(json.dumps(metas,indent=2)); app.close()
