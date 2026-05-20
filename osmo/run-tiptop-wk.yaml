@@ -1,0 +1,347 @@
+# TiPToP eval on robolab LH-WORLD-KNOWLEDGE (wk) tasks (osmo).
+#
+# Mirrors run-tiptop-bench-vague.yaml but:
+#   - dispatches across the 32-task long_horizon/world_knowledge suite,
+#     split into 4 batches (wk-batch-{0..3}: Art/Chem/Math/Recycle —
+#     same enums as cap-x/run-capx-wk.yaml so per-batch comparisons line up);
+#   - --task-subdirs long_horizon/world_knowledge passed to BOTH H5 export
+#     and replay manifest driver (per [[tiptop-robolab-api-drift]] —
+#     mismatch causes silent fallback to defaults).
+#   - LH-wk tasks have their own natural-language instructions; no
+#     --instruction-type vague.
+#
+# Submit (3 trials/task, Gemini AI Studio):
+#   osmo workflow submit osmo/run-tiptop-wk.yaml \
+#       --pool isaac-srl-l40-04 \
+#       --set-string batch_name=wk-batch-0 llm_backend=gemini \
+#       --set trials=3
+#
+# Outputs:
+#   /mnt/amlfs-04/home/{{user_name}}/tiptop-wk-results/<scene>/<run_ts>/trial_<N>/
+# Kept disjoint from the LH-CS / bench-vague trees so the dashboard
+# aggregator can pivot the suites independently.
+
+workflow:
+  name: tiptop-wk-{{batch_name}}
+  tasks:
+  - name: tiptop-trial
+    image: nvcr.io/nvidia/isaac-lab:2.2.0
+    command: ["bash"]
+    args: ["/tmp/entry.sh"]
+    environment:
+      ACCEPT_EULA: Y
+      NO_NUCLEUS: Y
+    credentials:
+      github-pat: /tmp/github
+      hf-token: /tmp/hf
+      nvidia-api-key: /tmp/nvidia
+      google-api-key: /tmp/google
+    files:
+    - path: /tmp/setup_github_auth.sh
+      contents: |-
+        echo "[auth] /tmp/github contents: $(ls /tmp/github/ 2>&1)"
+        GH_FILE=$(ls /tmp/github/ 2>/dev/null | head -1)
+        if [ -z "$GH_FILE" ]; then
+          echo "[auth] FATAL: /tmp/github is empty — credential not mounted"
+          exit 1
+        fi
+        GH_PAT=$(cat "/tmp/github/$GH_FILE")
+        git config --global credential.helper store
+        echo "https://ChicyChen:${GH_PAT}@github.com" > ~/.git-credentials
+        git config --global credential.helper 'store --file ~/.git-credentials'
+
+    - path: /tmp/predownload_m2t2.py
+      contents: |-
+        import os
+        os.environ["HF_HUB_DISABLE_XET"] = "1"
+        os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+        from huggingface_hub import snapshot_download
+        token = os.environ.get("HF_TOKEN")
+        print("[predownload] wentao-yuan/m2t2 (m2t2.pth) ...", flush=True)
+        path = snapshot_download(
+            "wentao-yuan/m2t2",
+            allow_patterns=["m2t2.pth"],
+            token=token,
+            max_workers=8,
+        )
+        print(f"[predownload] wentao-yuan/m2t2 done → {path}", flush=True)
+
+    - path: /tmp/entry.sh
+      contents: |
+        set -e
+        echo "batch_name  : {{batch_name}}"
+        echo "trials      : {{trials}}"
+        echo "user_name   : {{user_name}}"
+        echo "llm_backend : {{llm_backend}}"
+        date
+
+        if [ -e "/usr/share/vulkan" ] && [ -e "/etc/vulkan" ]; then
+          mv /usr/share/vulkan /usr/share/vulkan_hidden
+        fi
+
+        apt update
+        apt install -y openssh-server git tmux vim htop git-lfs iputils-ping ffmpeg python3-venv python3-dev build-essential curl ca-certificates
+        mkdir -p /run/sshd
+        sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sed -i 's/#PermitEmptyPasswords.*/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+        echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+        echo 'PermitEmptyPasswords yes' >> /etc/ssh/sshd_config
+        passwd -d root
+        /sbin/sshd
+
+        bash /tmp/setup_github_auth.sh
+
+        export LUSTRE_USER={{user_name}}
+        export LUSTRE_DIR=/mnt/amlfs-04/home/{{user_name}}
+        export ROBOLAB_DIR=$LUSTRE_DIR/robolab
+        export TIPTOP_DIR=$LUSTRE_DIR/tiptop
+        export M2T2_DIR=$LUSTRE_DIR/M2T2
+        export VLM_ORCH_DIR=$LUSTRE_DIR/vlm-orchestrator
+
+        echo "[auth] /tmp/hf: $(ls /tmp/hf/ 2>&1)  /tmp/nvidia: $(ls /tmp/nvidia/ 2>&1)  /tmp/google: $(ls /tmp/google/ 2>&1)"
+        HF_FILE=$(ls /tmp/hf/ 2>/dev/null | head -1)
+        NV_FILE=$(ls /tmp/nvidia/ 2>/dev/null | head -1)
+        GG_FILE=$(ls /tmp/google/ 2>/dev/null | head -1)
+        export HF_TOKEN=$(cat "/tmp/hf/$HF_FILE" 2>/dev/null)
+        export NVIDIA_API_KEY=$(cat "/tmp/nvidia/$NV_FILE" 2>/dev/null)
+        export GOOGLE_API_KEY=$(cat "/tmp/google/$GG_FILE" 2>/dev/null)
+
+        (
+          flock -x 200
+          if [ ! -d "$TIPTOP_DIR/.git" ]; then
+            echo "[setup] cloning ChicyChen/tiptop → $TIPTOP_DIR"
+            git clone --recurse-submodules \
+              -b feat/our-robolab \
+              https://github.com/ChicyChen/tiptop.git "$TIPTOP_DIR"
+          else
+            echo "[setup] updating tiptop in $TIPTOP_DIR"
+            cd "$TIPTOP_DIR"
+            rm -f .git/index.lock
+            git fetch origin
+            git reset --hard origin/feat/our-robolab
+            git submodule update --init --recursive
+          fi
+        ) 200>"$LUSTRE_DIR/.lock-tiptop"
+
+        (
+          flock -x 200
+          if [ ! -d "$M2T2_DIR/.git" ]; then
+            echo "[setup] cloning ChicyChen/m2t2-tiptop → $M2T2_DIR"
+            git clone https://github.com/ChicyChen/m2t2-tiptop.git "$M2T2_DIR"
+          else
+            echo "[setup] updating M2T2 in $M2T2_DIR"
+            cd "$M2T2_DIR"
+            rm -f .git/index.lock
+            git fetch origin
+            git reset --hard origin/master
+          fi
+        ) 200>"$LUSTRE_DIR/.lock-m2t2"
+
+        if [ ! -d "$ROBOLAB_DIR" ]; then
+          echo "[setup] FATAL: robolab not found at $ROBOLAB_DIR"
+          exit 1
+        fi
+
+        export PIXI_HOME=$LUSTRE_DIR/.pixi
+        export PATH=$PIXI_HOME/bin:$PATH
+        if ! command -v pixi >/dev/null; then
+          echo "[setup] installing pixi → $PIXI_HOME"
+          curl -fsSL https://pixi.sh/install.sh | bash
+        else
+          echo "[setup] pixi already installed at $(command -v pixi)"
+        fi
+
+        echo "[setup] pixi install for tiptop"
+        cd "$TIPTOP_DIR"
+        pixi install 2>&1 | tail -5
+        if ! pixi run python -c "import cutamp" >/dev/null 2>&1; then
+          echo "[setup] pixi run setup-planners (install cuRobo + cuTAMP)"
+          pixi run setup-planners 2>&1 | tail -10
+        else
+          echo "[setup] cutamp + curobo already importable"
+        fi
+
+        cd "$M2T2_DIR"
+        if [ ! -d "$M2T2_DIR/.pixi/envs/default" ]; then
+          echo "[setup] pixi install for M2T2"
+          pixi install 2>&1 | tail -5
+        else
+          echo "[setup] M2T2 pixi env already populated"
+        fi
+
+        echo "[setup] pixi run build (M2T2 pip install + pointnet2_ops + numpy<2 pin)"
+        pixi run build 2>&1 | tail -10
+        pixi run check 2>&1 | tail -5
+
+        export HF_HOME=$LUSTRE_DIR/hf_cache
+        mkdir -p "$HF_HOME"
+        ISAAC_PY=/workspace/isaaclab/_isaac_sim/python.sh
+        $ISAAC_PY -m pip install --quiet huggingface_hub hf_transfer
+        $ISAAC_PY /tmp/predownload_m2t2.py
+        M2T2_CKPT=$(find "$HF_HOME" -name 'm2t2.pth' | head -1)
+        if [ -z "$M2T2_CKPT" ]; then
+          echo "[setup] FATAL: m2t2.pth not found under $HF_HOME after predownload"
+          exit 1
+        fi
+        mkdir -p "$M2T2_DIR/weights"
+        ln -sf "$M2T2_CKPT" "$M2T2_DIR/weights/m2t2.pth"
+        echo "[setup] m2t2.pth → $M2T2_DIR/weights/m2t2.pth → $M2T2_CKPT"
+
+        echo "[install] robolab into Isaac Sim python (--no-deps; isaaclab/isaacsim already in container)"
+        cd "$ROBOLAB_DIR"
+        $ISAAC_PY -m pip install --no-deps -e .
+        $ISAAC_PY -m pip install json_numpy pyzmq tyro trimesh==4.5.1 h5py opencv-python
+
+        mkdir -p /tmp/tiptop_servers
+        echo "[m2t2] launching m2t2_server.py on :8123 (pixi env)"
+        tmux new-session -d -s m2t2 \
+            "cd $M2T2_DIR && pixi run python m2t2_server.py --port 8123 \
+                > /tmp/tiptop_servers/m2t2.log 2>&1; sleep infinity"
+        for i in $(seq 1 30); do
+          if (echo > /dev/tcp/127.0.0.1/8123) >/dev/null 2>&1; then
+            echo "[m2t2] :8123 ready (after ${i}0s)"
+            break
+          fi
+          sleep 10
+        done
+
+        cd "$TIPTOP_DIR"
+        ROBOLAB_REPO=$ROBOLAB_DIR ROBOLAB_PYTHON=$ISAAC_PY \
+          M2T2_REPO=$M2T2_DIR M2T2_PORT=8123 \
+          M2T2_CONDA_ENV=m2t2 \
+          bash robolab/install_robolab.sh
+        source "$TIPTOP_DIR/.env.robolab"
+
+        RUN_TS=$(date -u +%Y%m%dT%H%M%SZ)
+        echo "[run] batch={{batch_name}} run_ts=$RUN_TS trials={{trials}} llm_backend={{llm_backend}}"
+
+        # 4 batches × 8 tasks = 32 LH-wk tasks; same enums as cap-x's
+        # run-capx-wk.yaml so per-batch comparisons line up.
+        # Smoke uses RecycleCanTask (simplest, fewest object_at predicates
+        # per memory [[capx-gt-leakage]]).
+        case "{{batch_name}}" in
+          smoke|wk-smoke-0)
+            SCENE_ARR=(RecycleCanTask) ;;
+          wk-batch-0)
+            # Art (8 tasks)
+            SCENE_ARR=(ArtAirplaneTailTask ArtCarWheelTask ArtFaceEyeTask ArtFaceMouthTask ArtFlowerGardenTask ArtSailboatTask ArtStickfigureClutterTask ArtStickfigureHeadTask) ;;
+          wk-batch-1)
+            # Chem (8 tasks)
+            SCENE_ARR=(ChemAtomicStackTask ChemCO2Task ChemHalogenAlkaliTask ChemLightestTask ChemNobleGasTask ChemSaltTask ChemSortNobleMetalTask ChemWaterTask) ;;
+          wk-batch-2)
+            # Math (8 tasks)
+            SCENE_ARR=(MathAdditionTask MathBalanceEquationTask MathFactorPairTask MathMissingOperandTask MathMultiplyTask MathPrimeStackTask MathSubtractionTask MathSumToBowlTask) ;;
+          wk-batch-3)
+            # Recycle (8 tasks)
+            SCENE_ARR=(RecycleBananaTask RecycleCanTask RecycleCupTask RecycleCupClutterTask RecycleSort2Task RecycleSort3Task RecycleSort4Task RecycleSort5Task) ;;
+          *)
+            echo "[run] FATAL: unknown batch_name '{{batch_name}}' — see osmo/run-tiptop-wk.yaml"
+            exit 1 ;;
+        esac
+        echo "[run] scenes: ${SCENE_ARR[*]}"
+
+        for scene in "${SCENE_ARR[@]}"; do
+          scene=$(echo "$scene" | xargs)
+          for trial in $(seq 1 {{trials}}); do
+            TRIAL_DIR=$LUSTRE_DIR/tiptop-wk-results/$scene/$RUN_TS/trial_$trial
+            mkdir -p "$TRIAL_DIR"
+            echo
+            echo "============================================================"
+            echo "[run] scene=$scene trial=$trial dir=$TRIAL_DIR"
+            echo "============================================================"
+
+            if [ "{{replay_only}}" = "true" ]; then
+              EXISTING_PLAN=$(ls -1dt $LUSTRE_DIR/tiptop-wk-results/$scene/*/trial_$trial/plan/*/tiptop_plan.json 2>/dev/null | head -1)
+              if [ -z "$EXISTING_PLAN" ]; then
+                echo "[run] replay_only: no existing tiptop_plan.json for $scene trial $trial — skip"
+                continue
+              fi
+              EXISTING_PLAN_TS_DIR=$(dirname "$EXISTING_PLAN")
+              echo "[run] replay_only: using plan from $EXISTING_PLAN_TS_DIR"
+              PLAN_DIR=$TRIAL_DIR/plan
+              mkdir -p "$PLAN_DIR"
+              SCENE="$scene" PLAN_TS_DIR="$EXISTING_PLAN_TS_DIR" python3 -c "import json,os; print(json.dumps([{'env_name':os.environ['SCENE'],'run_dir':os.environ['PLAN_TS_DIR'],'has_plan':True}]))" > "$PLAN_DIR/summary.json"
+              ROB_OUT=$TRIAL_DIR/robolab_output
+              mkdir -p "$ROB_OUT"
+            else
+              # Step 1: export H5 (Isaac Sim) — LH-wk default instructions.
+              H5_DIR=$TRIAL_DIR/h5
+              ROB_OUT=$TRIAL_DIR/robolab_output
+              mkdir -p "$H5_DIR" "$ROB_OUT"
+              ROBOLAB_OUTPUT_DIR="$ROB_OUT" \
+              $ISAAC_PY $TIPTOP_DIR/robolab/scripts/export_robolab_tiptop_h5_rgbd.py \
+                --headless \
+                --task "$scene" \
+                --task-subdirs long_horizon/world_knowledge \
+                --output-dir "$H5_DIR" \
+                --camera external_cam \
+                || { echo "[run] export FAILED for $scene trial $trial"; continue; }
+
+              PLAN_DIR=$TRIAL_DIR/plan
+              mkdir -p "$PLAN_DIR"
+              MANIFEST_JSON="$H5_DIR/manifest.json"
+              H5_PATH=$(python3 -c "import json,sys; m=json.load(open(sys.argv[1])); print((m[0] if isinstance(m,list) else m)['h5_path'])" "$MANIFEST_JSON")
+              INSTR=$(python3 -c "import json,sys; m=json.load(open(sys.argv[1])); print((m[0] if isinstance(m,list) else m)['instruction'])" "$MANIFEST_JSON")
+              TIPTOP_GRASP_DEEPER_M=0.015 \
+              TIPTOP_LLM_BACKEND={{llm_backend}} \
+                pixi run --manifest-path $TIPTOP_DIR/pixi.toml \
+                  python $TIPTOP_DIR/robolab/scripts/tiptop_h5_gemini_deeper_runner.py \
+                    --h5-path "$H5_PATH" \
+                    --task-instruction "$INSTR" \
+                    --output-dir "$PLAN_DIR" \
+                    --max-planning-time 20 \
+                    --num-particles 64 \
+                    --opt-steps-per-skeleton 100 \
+                || echo "[run] planning exited non-zero for $scene trial $trial (partial results may exist)"
+              PLAN_TS_DIR=$(find "$PLAN_DIR" -maxdepth 1 -mindepth 1 -type d | head -1)
+              if [ -n "$PLAN_TS_DIR" ] && [ -f "$PLAN_TS_DIR/tiptop_plan.json" ]; then
+                SCENE="$scene" PLAN_TS_DIR="$PLAN_TS_DIR" python3 -c "import json,os; print(json.dumps([{'env_name':os.environ['SCENE'],'run_dir':os.environ['PLAN_TS_DIR'],'has_plan':True}]))" > "$PLAN_DIR/summary.json"
+              else
+                echo "[run] no tiptop_plan.json — replay will skip this scene/trial"
+                echo '[]' > "$PLAN_DIR/summary.json"
+              fi
+            fi
+
+            REPLAY_DIR=$TRIAL_DIR/replay
+            mkdir -p "$REPLAY_DIR"
+            if [ -f "$PLAN_DIR/summary.json" ]; then
+              ROBOLAB_OUTPUT_DIR="$ROB_OUT" \
+              $ISAAC_PY $TIPTOP_DIR/robolab/scripts/replay_tiptop_robolab_manifest.py \
+                --planning-summary "$PLAN_DIR/summary.json" \
+                --output-dir "$REPLAY_DIR" \
+                --timeout-s 900 \
+                --stride 4 --max-joint-step 0.03 \
+                --gripper-steps 60 --post-steps 120 \
+                --camera external_cam \
+                --task-subdirs long_horizon/world_knowledge \
+                --robolab-python "$ISAAC_PY" \
+                || echo "[run] replay exited non-zero for $scene trial $trial"
+            else
+              echo "[run] no plan summary at $PLAN_DIR/summary.json — skipping replay"
+            fi
+
+            echo "[done] $scene trial $trial → $TRIAL_DIR"
+            ls -la "$TRIAL_DIR" || true
+          done
+
+          SCENE_DIR=$LUSTRE_DIR/tiptop-wk-results/$scene/$RUN_TS
+          mkdir -p "$SCENE_DIR/_servers"
+          cp -v /tmp/tiptop_servers/*.log "$SCENE_DIR/_servers/" 2>/dev/null || true
+        done
+
+        touch /done.txt
+        sleep 600
+  resources:
+    default:
+      gpu: 1
+      cpu: 12
+      memory: 80Gi
+      storage: 80Gi
+      platform: ovx-l40
+
+default-values:
+  batch_name: smoke
+  trials: 1
+  user_name: siyic
+  llm_backend: nvidia
+  replay_only: "false"
