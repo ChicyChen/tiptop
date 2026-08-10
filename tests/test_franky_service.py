@@ -258,7 +258,17 @@ class TestRetryUntilTheDriverEndsTheEpisode:
         svc._start_idle_watchdog = lambda: None
         th = threading.Thread(target=svc.serve_forever, daemon=True)
         th.start()
-        th.join(timeout=4.0)
+        # Poll instead of a fixed sleep: on a loaded host (siyi-hugo runs the
+        # live baselines) 4s was not always enough for the service thread to
+        # reach the first attempt, so the assertions saw zero calls.
+        deadline = time.time() + 30.0
+        while time.time() < deadline:
+            if calls and not th.is_alive():
+                break
+            if calls and len(calls) >= len(seq):
+                break
+            time.sleep(0.05)
+        th.join(timeout=1.0)
         return svc, calls
 
     def test_no_plan_triggers_another_attempt(self, tmp_path):
