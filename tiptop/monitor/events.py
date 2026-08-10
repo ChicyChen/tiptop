@@ -69,6 +69,12 @@ class EventBus:
         #: replaying every event.
         self.episodes: dict[Any, dict[str, Any]] = {}
         self._current_episode: Any = None
+        #: Bumped on every driver (re)connection. Drivers restart their
+        #: episode_id counter, so ids ARE re-used across sessions -- a second
+        #: robot reused id 202 eleven hours later and its events were filed as
+        #: "attempt 5" of the first robot's episode 202, mixing two tasks into
+        #: one row. Rows are therefore keyed on (session, episode_id).
+        self._session: int = 0
         # Episodes whose fresh plan has not started yet (see mark_superseded).
         self._awaiting_plan: set = set()
 
@@ -81,6 +87,8 @@ class EventBus:
                 event.seq = self._seq
                 if event.episode is None:
                     event.episode = self._current_episode
+                event.data = dict(event.data or {})
+                event.data.setdefault("session", self._session)
                 if (
                     event.episode in self._awaiting_plan
                     and event.kind
@@ -117,7 +125,8 @@ class EventBus:
     def _roll_up(self, e: Event) -> None:
         if e.kind == EventKind.EPISODE_START:
             self._current_episode = e.episode
-            existing = self.episodes.get(e.episode)
+            key = self._key(e.episode)
+            existing = self.episodes.get(key)
             if existing is not None:
                 # A row can already exist because a task/tool event arrived
                 # first (auto-created below). Re-opening the episode must not
@@ -125,8 +134,9 @@ class EventBus:
                 existing["ended"] = None
                 existing["last_event"] = e.ts
                 return
-            self.episodes[e.episode] = {
+            self.episodes[key] = {
                 "episode": e.episode,
+                "session": self._session,
                 "started": e.ts,
                 "ended": None,
                 "task": None,
@@ -139,7 +149,8 @@ class EventBus:
                 "last_event": e.ts,
             }
             return
-        ep = self.episodes.get(e.episode)
+        key = self._key(e.episode)
+        ep = self.episodes.get(key)
         if ep is None:
             if e.episode is None:
                 return
@@ -149,8 +160,9 @@ class EventBus:
             # than dropping the data (that produced "a task with no episode
             # tab").
             self._current_episode = e.episode
-            ep = self.episodes[e.episode] = {
+            ep = self.episodes[key] = {
                 "episode": e.episode,
+                "session": self._session,
                 "started": e.ts,
                 "ended": None,
                 "task": None,
@@ -184,6 +196,36 @@ class EventBus:
             ep["chunks"] += 1
 
     # -- subscribe -----------------------------------------------------
+    def new_session(self, label: str = "") -> None:
+        """Start a fresh episode namespace (a driver connected/reconnected)."""
+        with self._lock:
+            self._session += 1
+            self._current_episode = None
+            s = self._session
+        try:
+            self.publish(
+                Event(
+                    kind=EventKind.SESSION,
+                    text=f"driver session {s} started" + (f" ({label})" if label else ""),
+                    data={"session": s},
+                )
+            )
+        except Exception:
+            pass
+
+    def _key(self, episode: Any) -> tuple:
+        return (self._session, episode)
+
+    def episode(self, episode: Any, session: int | None = None) -> dict | None:
+        """Row for *episode* in the CURRENT session (or an explicit one).
+
+        Rows are keyed on (session, episode_id) because drivers re-use ids, but
+        almost every caller means "the episode running now".
+        """
+        with self._lock:
+            s = self._session if session is None else session
+            return self.episodes.get((s, episode))
+
     def mark_superseded(self, episode: Any) -> None:
         """A new episode arrived; the OLD plan may still be unwinding.
 

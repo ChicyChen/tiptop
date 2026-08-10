@@ -27,11 +27,11 @@ class TestEpisodeAware:
         h.grasps(31, 0.28, 1.2)
         h.episode_end(7)
         h.episode_start(8, task="pick up the smaller block")
-        assert set(BUS.episodes) == {7, 8}
-        assert BUS.episodes[7]["task"] == "pick up the larger block"
-        assert BUS.episodes[8]["task"] == "pick up the smaller block"
-        assert BUS.episodes[7]["ended"] is not None
-        assert BUS.episodes[8]["ended"] is None
+        assert {k[1] for k in BUS.episodes} == {7, 8}
+        assert BUS.episode(7)["task"] == "pick up the larger block"
+        assert BUS.episode(8)["task"] == "pick up the smaller block"
+        assert BUS.episode(7)["ended"] is not None
+        assert BUS.episode(8)["ended"] is None
 
     def test_attempts_on_the_same_episode_do_not_create_a_second_row(self):
         from tiptop.monitor import hooks as h
@@ -39,14 +39,14 @@ class TestEpisodeAware:
         h.episode_start(7, task="t", attempt=1)
         h.episode_start(7, task="t", attempt=2)
         h.attempt(7, 2)
-        assert list(BUS.episodes) == [7]
-        assert BUS.episodes[7]["task"] == "t"
+        assert [k[1] for k in BUS.episodes] == [7]
+        assert BUS.episode(7)["task"] == "t"
 
     def test_episode_zero_is_valid(self):
         from tiptop.monitor import hooks as h
 
         h.episode_start(0, task="t")
-        assert 0 in BUS.episodes
+        assert BUS.episode(0) is not None
 
 
 class TestPipelineStages:
@@ -59,7 +59,7 @@ class TestPipelineStages:
         h.detections([{"label": "yellow_block"}, {"label": "bowl"}], [], 2.1)
         h.segmentation(3, 0.4)
         h.grasps(31, 0.28, 1.1)
-        tools = BUS.episodes[1]["tools"]
+        tools = BUS.episode(1)["tools"]
         assert tools == {"VLM detect": 1, "SAM2": 1, "M2T2": 1}
 
     def test_successful_planning_is_a_code_event(self):
@@ -67,7 +67,7 @@ class TestPipelineStages:
 
         h.episode_start(1, task="t")
         h.planning(success=True, seconds=12.3, steps=25)
-        assert BUS.episodes[1]["code_blocks"] == 1
+        assert BUS.episode(1)["code_blocks"] == 1
         assert "25 step" in BUS._history[-1].text
 
     def test_failed_planning_is_an_error_with_the_reason(self):
@@ -75,7 +75,7 @@ class TestPipelineStages:
 
         h.episode_start(1, task="t")
         h.planning(success=False, seconds=60.0, reason="no skeleton found")
-        assert BUS.episodes[1]["errors"] == 1
+        assert BUS.episode(1)["errors"] == 1
         assert "no skeleton found" in BUS._history[-1].text
 
     def test_snapshot_reports_depth_validity(self):
@@ -101,7 +101,7 @@ class TestPipelineStages:
 
         h.episode_start(1, task="t")
         h.motion_done(n_waypoints=46, planned_s=3.08, actual_s=3.21, converged=True)
-        assert BUS.episodes[1]["waypoints"] == 46
+        assert BUS.episode(1)["waypoints"] == 46
         assert "planned 3.08s" in BUS._history[-1].text
 
     def test_incomplete_motion_is_visible(self):

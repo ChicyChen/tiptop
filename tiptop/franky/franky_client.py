@@ -96,6 +96,10 @@ class _Cursor:
         #: when the operator starts a new episode. The task therefore comes off
         #: the wire, never from a CLI flag.
         self.prompt: Optional[str] = None
+        #: State for drivers that omit episode_id (see _synthetic_episode_id).
+        self.synth_prompt: Optional[str] = None
+        self.synth_seq: int = 0
+        self.session_tag: str = ""
         self.episode_seen: Any = None
         #: Bumped on every episode boundary / end. A plan bound to an older
         #: generation must abort rather than keep driving a dead episode.
@@ -168,6 +172,22 @@ class FrankyClient:
 
         await ws.send(packb(self._metadata()))
         print("[franky] driver connected", flush=True)
+        # Start a fresh dashboard namespace. Drivers restart their episode_id
+        # counter, so ids are re-used across connections: a second robot reused
+        # id 202 eleven hours later and its events were filed as "attempt 5" of
+        # the first robot's episode 202, mixing two different tasks into one row.
+        try:
+            from tiptop.monitor.events import BUS
+
+            BUS.new_session(f"{getattr(ws, 'remote_address', ('?',))[0]}")
+        except Exception:
+            pass
+        # Per-connection tag so synthetic ids from different drivers/sessions
+        # can never collide.
+        with self._cursor.lock:
+            self._cursor.session_tag = time.strftime("%H%M%S")
+            self._cursor.synth_prompt = None
+            self._cursor.synth_seq = 0
         n = 0
         try:
             async for raw in ws:
@@ -192,6 +212,11 @@ class FrankyClient:
                 self._cursor.rows, self._cursor.index = [], 0
                 self._cursor.last_cmd = None
                 self._cursor.wire = {}
+                # Forget the episode id too: the next driver may restart its
+                # counter, and a stale value would suppress the boundary that
+                # starts a fresh episode.
+                self._cursor.episode_seen = None
+                self._cursor.prompt = None
             print("[franky] driver disconnected", flush=True)
 
     @staticmethod
@@ -215,6 +240,16 @@ class FrankyClient:
         q = wire.get("observation/joint_position")
         ep_id = wire.get("episode_id")
         prompt = wire.get("prompt")
+        if ep_id is None:
+            # Some drivers do not send episode_id at all. Without it there is no
+            # boundary to detect, so a previous robot's episode_seen would
+            # persist and this driver's events would be filed under THAT episode
+            # (observed: a second robot's "Put the banana in the bowl" appeared
+            # as attempt 5 of an 11-hour-old episode 202). Synthesise a per-
+            # connection id instead, and start a new one whenever the task
+            # changes -- the prompt is the only episode signal such a driver
+            # gives us.
+            ep_id = self._synthetic_episode_id(prompt)
         c = self._cursor
         boundary_from = None
         with c.lock:
@@ -316,6 +351,29 @@ class FrankyClient:
         """Task instruction as sent by the driver on every frame."""
         with self._cursor.lock:
             return self._cursor.prompt
+
+    def _synthetic_episode_id(self, prompt: Optional[str]) -> str:
+        """Stable id for drivers that omit ``episode_id``.
+
+        Without one there is no boundary to detect, so a PREVIOUS driver's
+        episode_seen persists and this driver's events get filed under it -- a
+        second robot's "Put the banana in the bowl" showed up as attempt 5 of an
+        11-hour-old episode 202, mixing two tasks into one dashboard row.
+
+        Keyed on (connection, task text): a changed prompt means a new episode,
+        which is the only episode signal such a driver gives us. Returned as a
+        STRING so it can never collide with a numeric id from a driver that does
+        send one.
+        """
+        c = self._cursor
+        with c.lock:
+            if isinstance(prompt, str) and prompt.strip():
+                if prompt != c.synth_prompt:
+                    c.synth_prompt = prompt
+                    c.synth_seq += 1
+            elif c.synth_seq == 0:
+                c.synth_seq = 1
+            return f"auto{c.session_tag}-{c.synth_seq}"
 
     def episode_ended(self) -> bool:
         """True once the idle watchdog / disconnect closed the live episode."""

@@ -354,3 +354,110 @@ class TestExecutionFailuresAreBounded:
         assert "self._exec_failures = 0" in inspect.getsource(
             TiptopFrankyService.serve_forever
         )
+
+
+class TestDriversThatOmitEpisodeId:
+    """A second robot connected sending NO episode_id.
+
+    Its observation carried only prompt / joint_position / gripper_position /
+    two 224x224 images -- no episode_id, and no depth / camera_K /
+    camera_extrinsic / native RGB either.
+
+    Consequence on the dashboard: with no id there is no boundary, so the
+    PREVIOUS driver's episode_seen (202) persisted and the new robot's
+    "Put the banana in the bowl" was filed as attempt 5 of an 11-hour-old
+    episode, mixing two tasks into one row.
+    """
+
+    def _frame(self, prompt, ep=None):
+        f = {"prompt": prompt, "observation/joint_position": np.zeros(7)}
+        if ep is not None:
+            f["episode_id"] = ep
+        return f
+
+    def _client(self):
+        c = _client()
+        c._cursor.session_tag = "185034"
+        return c
+
+    def test_a_synthetic_id_is_used(self):
+        c = self._client()
+        c._on_frame(self._frame("Put the banana in the bowl"))
+        ep = c.current_episode()
+        assert isinstance(ep, str) and ep.startswith("auto"), ep
+
+    def test_same_task_stays_one_episode(self):
+        c = self._client()
+        c._on_frame(self._frame("Put the banana in the bowl"))
+        first = c.current_episode()
+        c._on_frame(self._frame("Put the banana in the bowl"))
+        assert c.current_episode() == first
+
+    def test_a_changed_task_starts_a_new_episode(self):
+        """The prompt is the only episode signal such a driver gives us."""
+        c = self._client()
+        c._on_frame(self._frame("Put the banana in the bowl"))
+        first = c.current_episode()
+        c._on_frame(self._frame("Sort the fruits"))
+        assert c.current_episode() != first
+
+    def test_synthetic_ids_cannot_collide_with_numeric_ones(self):
+        """A string id can never be confused with another driver's int 202."""
+        c = self._client()
+        c._on_frame(self._frame("task"))
+        assert not isinstance(c.current_episode(), int)
+
+    def test_a_driver_that_DOES_send_the_id_is_unaffected(self):
+        c = self._client()
+        c._on_frame(self._frame("task", ep=202))
+        assert c.current_episode() == 202
+
+    def test_reconnect_forgets_the_previous_episode(self):
+        """Otherwise a stale episode_seen suppresses the next boundary."""
+        c = self._client()
+        c._on_frame(self._frame("task", ep=202))
+        # emulate the disconnect cleanup
+        with c._cursor.lock:
+            c._cursor.episode_seen = None
+            c._cursor.prompt = None
+            c._cursor.synth_seq = 0
+            c._cursor.synth_prompt = None
+        c._on_frame(self._frame("a different robot's task"))
+        assert c.current_episode() != 202
+
+
+class TestDashboardSeparatesReusedIds:
+    """Drivers restart their episode_id counter, so ids ARE re-used."""
+
+    def test_the_same_id_in_two_sessions_is_two_rows(self):
+        from tiptop.monitor import hooks as h
+        from tiptop.monitor.events import BUS
+
+        BUS._history.clear()
+        BUS.episodes.clear()
+        BUS._session = 0
+
+        BUS.new_session("robot A")
+        h.episode_start(202, task="Sort the three fruits by size")
+        BUS.new_session("robot B")
+        h.episode_start(202, task="Put the banana in the bowl")
+
+        assert len(BUS.episodes) == 2, "a re-used id must not append to the old row"
+        tasks = {v["task"] for v in BUS.episodes.values()}
+        assert tasks == {
+            "Sort the three fruits by size",
+            "Put the banana in the bowl",
+        }
+
+    def test_episode_lookup_defaults_to_the_current_session(self):
+        from tiptop.monitor import hooks as h
+        from tiptop.monitor.events import BUS
+
+        BUS._history.clear()
+        BUS.episodes.clear()
+        BUS._session = 0
+        BUS.new_session("A")
+        h.episode_start(9, task="old")
+        BUS.new_session("B")
+        h.episode_start(9, task="new")
+        assert BUS.episode(9)["task"] == "new"
