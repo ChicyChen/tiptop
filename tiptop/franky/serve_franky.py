@@ -71,7 +71,27 @@ def apply_llm_backend_patch() -> str:
                 "TIPTOP_LLM_BACKEND=gemini needs GOOGLE_API_KEY; unset it to "
                 "use the NVIDIA inference backend instead"
             )
-        model = os.environ.get("TIPTOP_GEMINI_MODEL", "gemini-robotics-er-1.5-preview")
+        # tiptop.perception.gemini hardcodes model_id="gemini-robotics-er-1.5-preview",
+        # which Google has RETIRED:
+        #   "This model models/gemini-robotics-er-1.5-preview is no longer
+        #    available. Please update your code."
+        # The current spatial-reasoning models are gemini-robotics-er-2-preview
+        # and gemini-robotics-er-1.6-preview. Bind the default through the
+        # module so we do not edit shared tiptop code.
+        model = os.environ.get("TIPTOP_GEMINI_MODEL", "gemini-robotics-er-2-preview")
+        _orig_sync = g.detect_and_translate
+        _orig_async = g.detect_and_translate_async
+
+        def _sync(image, task_instruction, client=None, model_id=model):
+            return _orig_sync(image, task_instruction, client=client, model_id=model_id)
+
+        async def _async(image, task_instruction, client=None, model_id=model):
+            return await _orig_async(
+                image, task_instruction, client=client, model_id=model_id
+            )
+
+        g.detect_and_translate = _sync
+        g.detect_and_translate_async = _async
         print(f"[tiptop-service] LLM backend = gemini (model={model})", flush=True)
         return f"gemini:{model}"
 
